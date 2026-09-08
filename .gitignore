@@ -22,6 +22,7 @@ input/
 
 # Temp files
 ~$*.docx
+~$*.xlsx
 *.tmp
 
 # LyX backup files
@@ -38,6 +39,7 @@ stage2/*.docx
 
 .venv/
 .pytest_cache/
+.test-tmp*/
 .builds/
 tmp/
 .venv-linux/

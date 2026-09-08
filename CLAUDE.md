@@ -1,4 +1,4 @@
-# CLAUDE.md <!-- version: v4.2 -->
+# CLAUDE.md <!-- version: v4.3 -->
 
 ## Maintenance Rule
 
@@ -15,7 +15,7 @@
 
 ---
 
-## Current primary pipeline (v4.2)
+## Current primary pipeline (v4.3)
 
 Read `README.md` for current commands and setup. `AGENTS.md` owns maintenance
 instructions; `HANDOFF.md` records progress and validation.
@@ -41,6 +41,11 @@ required checks pass. Failed runs retain diagnostics and preserve existing outpu
 - Generated pages use natural bottom spacing. Content images retain smaller
   source-requested sizes and are capped at about 52% text width and 30% usable
   page height without cropping, distortion, or source-order changes.
+- Headless Linux compiler runs automatically use the offscreen Qt backend unless
+  the caller supplied a display or Qt platform. `setup-linux.sh` provisions the
+  supported Ubuntu/Debian environment.
+- Root-level Class 6th, 7th, and 8th Science PDF folders and
+  `Science-notes-links.xlsx` are intentional tracked reference inputs.
 - Caches are URL-keyed. Legacy chapter-number caches remain for the fallback only.
 - Test commands: `python -m pytest -q` and `python -m pytest -q -m integration`.
 

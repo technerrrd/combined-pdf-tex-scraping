@@ -154,6 +154,16 @@ def test_compiler_missing_is_not_skipped(monkeypatch):
     with pytest.raises(support.BuildError,match='Missing compiler'): support.executable('nonexistent-compiler')
 
 
+def test_headless_linux_compiler_environment():
+    linux = support.compiler_environment({'PATH': '/usr/bin'}, platform_name='posix')
+    assert linux['QT_QPA_PLATFORM'] == 'offscreen'
+    assert linux['openin_any'] == linux['openout_any'] == 'p'
+    desktop = support.compiler_environment({'DISPLAY': ':0'}, platform_name='posix')
+    assert 'QT_QPA_PLATFORM' not in desktop
+    explicit = support.compiler_environment({'QT_QPA_PLATFORM': 'minimal'}, platform_name='posix')
+    assert explicit['QT_QPA_PLATFORM'] == 'minimal'
+
+
 def test_unsupported_and_matrix_mathml():
     for markup,expected in [('<mroot><mi>x</mi><mn>3</mn></mroot>',r'\sqrt[3]{x}'),('<msubsup><mi>x</mi><mn>1</mn><mn>2</mn></msubsup>','{x}_{1}^{2}'),('<mfenced><mi>x</mi><mi>y</mi></mfenced>',r'\left(x,y\right)'),('<mover><mi>x</mi><mo>^</mo></mover>',r'\hat{x}')]:
         runs=parse_html('<p><math>'+markup+'</math></p>')[0]['segments']

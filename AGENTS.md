@@ -6,6 +6,7 @@
 - Read CLAUDE.md for the inherited pipeline and formatting specifications. Preserve those rules unless the user changes them; flag discrepancies between the notes and implementation.
 - Use repository-relative paths in documentation.
 - Preserve user changes and avoid committing inputs, generated outputs, environments, logs, or secrets.
+- The root-level `Class 6th Science/`, `Class 7th Science/`, `Class 8th Science/`, and `Science-notes-links.xlsx` are intentional tracked Linux test references; do not treat them as generated output.
 - Commit and push only when authorized by the user; standing authorization for automatic pushes has not been established.
 - Before pushing, verify the remote and review the diff and relevant validation results. Never force-push without explicit authorization.
 - Never include credentials or secrets in project files or handoff notes. Use existing Git authentication or interactive sign-in.

@@ -14,9 +14,17 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt
 ```
 
-On Linux, use `.venv/bin/python` instead. Compilers `pdflatex`, `kpsewhich`, and
-`lyx` must be on PATH; standard Windows LyX installations are also discovered.
-For headless Linux runs, set `QT_QPA_PLATFORM=offscreen`.
+On Ubuntu or Debian, the repository setup script installs the system packages and
+creates `.venv-linux`:
+
+```bash
+./setup-linux.sh
+```
+
+Compilers `pdflatex`, `kpsewhich`, and `lyx` must be on PATH; standard Windows
+LyX installations are also discovered. The pipeline automatically selects
+LyX's offscreen Qt backend on a headless Linux host while preserving an explicit
+`QT_QPA_PLATFORM`, `DISPLAY`, or `WAYLAND_DISPLAY` configuration.
 
 The existing theme needs the LaTeX extra, science, and font packages. On Ubuntu:
 
@@ -40,6 +48,12 @@ https://edurev.in/t/456/Chapter-Notes-Light - Chapter2
 
 ```powershell
 .venv/Scripts/python.exe stage0/scrape_chapters.py --links input/CHAPTER-LINKS --module ScienceNotes --title "Science Notes"
+```
+
+Linux uses the same arguments:
+
+```bash
+.venv-linux/bin/python stage0/scrape_chapters.py --links input/CHAPTER-LINKS --module ScienceNotes --title "Science Notes"
 ```
 
 | Option | Behavior |
@@ -147,13 +161,22 @@ ordinary prose and plain numbers are not guessed to be equations.
 .venv/Scripts/python.exe -m pytest -q -m integration --basetemp=tmp/integration-test
 ```
 
+```bash
+.venv-linux/bin/python -m pytest -q
+.venv-linux/bin/python -m pytest -q -m integration --basetemp=tmp/integration-test
+```
+
 The first command runs offline unit/regression tests. The second invokes real
 compilers, validates a complete fixture module, rejects a bad reference, and
 checks that a missing asset cannot overwrite good output. Missing compilers fail
 integration tests; they are not silently skipped. CI runs offline tests on Windows
 and Linux and a compiler-equipped Linux integration job.
 
+The root-level `Class 6th Science/`, `Class 7th Science/`, and `Class 8th Science/`
+folders are intentionally tracked reference PDFs. `Science-notes-links.xlsx`
+contains the corresponding source links. Generated output, caches, temporary
+files, credentials, and documents placed under `input/` remain untracked.
+
 The PDF/DOCX fallback is retained; its legacy formatting guidance remains in
 `CLAUDE.md`. Use `AGENTS.md` for maintenance instructions and `HANDOFF.md` for the
-current state. No input documents, credentials, environments, or generated output
-should be committed.
+current state.

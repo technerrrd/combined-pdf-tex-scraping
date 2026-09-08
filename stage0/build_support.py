@@ -110,8 +110,18 @@ def preflight():
     return programs
 
 
+def compiler_environment(environ=None, platform_name=None):
+    """Return a compiler environment that also works on headless Linux hosts."""
+    environment = dict(os.environ if environ is None else environ)
+    current_platform = os.name if platform_name is None else platform_name
+    if current_platform != 'nt' and not environment.get('DISPLAY') and not environment.get('WAYLAND_DISPLAY'):
+        environment.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    environment.update(openin_any='p', openout_any='p')
+    return environment
+
+
 def command(args, directory, log, timeout=180):
-    environment = dict(os.environ, openin_any='p', openout_any='p')
+    environment = compiler_environment()
     try:
         result = subprocess.run(args, cwd=directory, env=environment, capture_output=True, timeout=timeout)
         atomic_write(log, result.stdout + result.stderr)

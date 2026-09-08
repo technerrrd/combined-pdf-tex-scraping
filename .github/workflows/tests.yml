@@ -1,5 +1,17 @@
 name: Pipeline validation
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - 'Class 6th Science/**'
+      - 'Class 7th Science/**'
+      - 'Class 8th Science/**'
+      - 'Science-notes-links.xlsx'
+  pull_request:
+    paths-ignore:
+      - 'Class 6th Science/**'
+      - 'Class 7th Science/**'
+      - 'Class 8th Science/**'
+      - 'Science-notes-links.xlsx'
 jobs:
   offline:
     strategy:
@@ -8,6 +20,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
+            Final-lyx_template
+            stage0
+            stage1
+            stage2
+            tests
+            AGENTS.md
+            CLAUDE.md
+            HANDOFF.md
+            README.md
+            requirements.txt
+            pytest.ini
+          sparse-checkout-cone-mode: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -17,6 +44,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
+            Final-lyx_template
+            stage0
+            stage1
+            stage2
+            tests
+            AGENTS.md
+            CLAUDE.md
+            HANDOFF.md
+            README.md
+            requirements.txt
+            pytest.ini
+          sparse-checkout-cone-mode: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
