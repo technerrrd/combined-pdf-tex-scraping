@@ -46,6 +46,7 @@
 - Ubuntu WSL Python 3.14 after Linux optimization: 55 regular tests passed; `setup-linux.sh` passed `bash -n`. That WSL installation has no LyX/TeX binaries, so Linux compiler validation remains assigned to GitHub Actions.
 - Windows Python 3.12 after Linux optimization: 55 regular tests passed and the real TeX/LyX compiler integration passed in 64.73 seconds.
 - All 20 tracked reference PDFs opened successfully (360 pages total); the workbook ZIP is valid and contains 7 Class 8, 7 Class 7, and 6 Class 6 links.
+- The first post-push Linux compiler job reached pytest but failed because sparse checkout omitted the relative `tmp/` parent used by `--basetemp`; the workflow now uses the runner's absolute temporary directory. GitHub actions were also updated to their Node 24 major versions.
 
 ## Known limits and next steps
 
