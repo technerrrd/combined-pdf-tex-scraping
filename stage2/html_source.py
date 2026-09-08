@@ -9,6 +9,10 @@ _HEADINGS = {'h2': 'section', 'h3': 'subsection', 'h4': 'subsubsection'}
 _NOISE_RE = re.compile(r'^(view more|view solution|join for free|table of contents|explore courses|download|attempt test)\b', re.I)
 _HEADING_NUM_RE = re.compile(r'^(?:Q\d+\.?\s+|\d+(?:\.\d+)*\.?\s+|\([a-zA-Z0-9]+\)\s+)')
 _PUNCT = str.maketrans({'\u00ad': '', '\u200b': '', '\u200c': '', '\u200d': '', '\ufeff': '', '‘': "'", '’': "'", '“': '"', '”': '"', '–': '--', '—': '---', '…': '...'})
+MAX_IMAGE_WIDTH = .52
+MAX_IMAGE_HEIGHT = .30
+# A4 with the primary TeX margins has about 1.54 times as much usable height as width.
+TEXT_HEIGHT_TO_WIDTH = 1.54
 
 
 def clean_text(text):
@@ -41,6 +45,14 @@ def _segments_text(runs):
 
 def pick_scale(width):
     return min([.25, .4, .5, .6, .75], key=lambda s: abs(s - width / 700)) if width else .6
+
+
+def fit_image_scale(requested, width, height):
+    """Fit an image within the balanced page box without enlarging or distorting it."""
+    if width <= 0 or height <= 0:
+        raise ValueError('Decoded image dimensions must be positive')
+    height_limited_width = MAX_IMAGE_HEIGHT * TEXT_HEIGHT_TO_WIDTH * (width / height)
+    return round(min(requested, MAX_IMAGE_WIDTH, height_limited_width), 3)
 
 
 def parse_html(html, base_url=''):

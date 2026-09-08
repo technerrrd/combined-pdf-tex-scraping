@@ -1,4 +1,4 @@
-# CLAUDE.md <!-- version: v4.1 -->
+# CLAUDE.md <!-- version: v4.2 -->
 
 ## Maintenance Rule
 
@@ -15,7 +15,7 @@
 
 ---
 
-## Current primary pipeline (v4.1)
+## Current primary pipeline (v4.2)
 
 Read `README.md` for current commands and setup. `AGENTS.md` owns maintenance
 instructions; `HANDOFF.md` records progress and validation.
@@ -38,6 +38,9 @@ required checks pass. Failed runs retain diagnostics and preserve existing outpu
   Presentation MathML remain editable. Unknown math raises a review error.
 - The primary path no longer flattens scientific notation to ASCII. Image formulas
   remain images. No equations are inferred from prose or transcribed from images.
+- Generated pages use natural bottom spacing. Content images retain smaller
+  source-requested sizes and are capped at about 52% text width and 30% usable
+  page height without cropping, distortion, or source-order changes.
 - Caches are URL-keyed. Legacy chapter-number caches remain for the fallback only.
 - Test commands: `python -m pytest -q` and `python -m pytest -q -m integration`.
 

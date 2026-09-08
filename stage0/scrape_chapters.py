@@ -57,6 +57,29 @@ def module_name(args):
     return name
 
 
+def rendered_text(doc, page_range, furniture):
+    """Return PDF text with page numbers and repeated document headings removed."""
+    from validate_against_pdf import norm
+    furniture_keys = {norm_value for value in furniture if (norm_value := norm(value))}
+    lines = []
+    for page_number in range(page_range['start_page'] - 1, page_range['end_page']):
+        page = doc[page_number]
+        for block in page.get_text('dict')['blocks']:
+            for line in block.get('lines', []):
+                stripped = ''.join(span['text'] for span in line['spans']).strip()
+                normalized = norm(stripped)
+                y0, y1 = line['bbox'][1], line['bbox'][3]
+                in_margin = y0 < 80 or y1 > page.rect.height - 35
+                if not normalized or re.fullmatch(r'\d+(?:\.\d+)*', stripped):
+                    continue
+                running_heading = (re.match(r'^\d*\s*chapter\s+\d+\.\s+', stripped, re.I) or
+                                   re.match(r'^\d+(?:\.\d+)+\s+\S', stripped))
+                if in_margin and (running_heading or normalized in furniture_keys):
+                    continue
+                lines.append(stripped)
+    return norm('\n'.join(lines))
+
+
 def check_structure(chapters, directory, module, outputs):
     import inline_content as inline
     from build_support import ValidationError, validate_image
@@ -66,15 +89,19 @@ def check_structure(chapters, directory, module, outputs):
     lyx = (directory / (module + '.lyx')).read_text(encoding='utf-8')
     stats = {}
     prose = {}
+    headings = {}
     images = {}
     heading_counts = {}
     list_items = 0
     for ch in chapters:
         prose[ch['num']] = []
+        headings[ch['num']] = [ch['name']]
         images[ch['num']] = []
         for e in ch['elements']:
             kind = e['type']; stats[kind] = stats.get(kind, 0) + 1
-            if kind == 'heading': heading_counts[e['level']] = heading_counts.get(e['level'], 0) + 1
+            if kind == 'heading':
+                heading_counts[e['level']] = heading_counts.get(e['level'], 0) + 1
+                headings[ch['num']].append(inline.plain(e['segments']) if 'segments' in e else e['text'])
             if kind == 'list': list_items += len(e['items'])
             if kind == 'image':
                 asset = directory / 'media' / e['filename']
@@ -87,7 +114,8 @@ def check_structure(chapters, directory, module, outputs):
             if kind == 'list': segments.extend(s for _, s in e['items'])
             if kind == 'table': segments.extend(c for r in e['rows'] for c in r if isinstance(c, list))
             for runs in segments:
-                prose[ch['num']].extend(s['text'] for s in inline.adapt(runs) if s['kind'] == 'text' and len(norm(s['text'])) >= 3)
+                if kind != 'heading':
+                    prose[ch['num']].extend(s['text'] for s in inline.adapt(runs) if s['kind'] == 'text' and len(norm(s['text'])) >= 3)
                 rendered = inline.tex(runs)
                 if rendered and rendered not in tex: raise ValidationError('Generated TeX lost source content')
                 for s in inline.adapt(runs):
@@ -109,8 +137,11 @@ def check_structure(chapters, directory, module, outputs):
         with pymupdf.open(path) as doc:
             ranges = map_pdf(doc, chapters, generated=True)
             for ch, r in zip(chapters, ranges):
-                text = norm('\n'.join(doc[p].get_text() for p in range(r['start_page']-1, r['end_page'])))
-                if not text: raise ValidationError(f'{label}: empty chapter {ch["num"]}')
+                raw_text = norm('\n'.join(doc[p].get_text() for p in range(r['start_page']-1, r['end_page'])))
+                if not raw_text: raise ValidationError(f'{label}: empty chapter {ch["num"]}')
+                missing_headings = [value for value in headings[ch['num']] if norm(value) not in raw_text]
+                if missing_headings: raise ValidationError(f'{label}: chapter {ch["num"]} lost headings: {missing_headings}')
+                text = rendered_text(doc, r, headings[ch['num']])
                 placed = [info['digest'] for p in range(r['start_page']-1, r['end_page']) for info in doc[p].get_image_info(hashes=True)]
                 cursor = 0
                 for digest in images[ch['num']]:
@@ -163,6 +194,7 @@ def build(args):
                             from PIL import Image
                             with Image.open(io.BytesIO(image)) as im:
                                 extension = '.png' if im.format == 'PNG' else '.jpg'
+                                el['scale'] = html_source.fit_image_scale(el['scale'], im.width, im.height)
                                 encoded = io.BytesIO()
                                 im.convert('RGB').save(encoded, format='PNG' if extension == '.png' else 'JPEG')
                             el['filename'] = hashlib.sha256(el['url'].encode()).hexdigest() + extension

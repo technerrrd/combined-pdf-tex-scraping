@@ -6,9 +6,9 @@ import requests
 from PIL import Image
 import build_support as support
 import inline_content as inline
-from html_source import parse_html
-from scrape_chapters import arguments, module_name, select_chapters
-from validate_against_pdf import coverage, map_pdf, validate_ranges, norm
+from html_source import fit_image_scale, parse_html
+from scrape_chapters import arguments, module_name, rendered_text, select_chapters
+from validate_against_pdf import coverage, map_pdf, reference_lines, validate_ranges, norm
 
 
 def response(status=200, content=b'good', headers=None):
@@ -180,6 +180,19 @@ def test_docx_fallback_legacy_segments(tmp_path):
     convert.write_lyx(elements,tmp_path/'fallback.lyx',media)
     assert r'\textbf{bold text}' in (tmp_path/'fallback.tex').read_text()
     assert '\\series bold' in (tmp_path/'fallback.lyx').read_text()
+    assert r'\raggedbottom' in (tmp_path/'fallback.tex').read_text()
+    assert r'\raggedbottom' in (tmp_path/'fallback.lyx').read_text()
+
+
+@pytest.mark.parametrize(('requested','width','height','expected'), [
+    (.75, 1200, 400, .52),   # landscape: width cap
+    (.60, 600, 600, .462),   # square: height cap
+    (.60, 300, 600, .231),   # portrait: height cap
+    (.60, 150, 900, .077),   # extremely tall: height cap
+    (.25, 1200, 400, .25),   # retain a smaller source-requested size
+])
+def test_balanced_image_scale(requested, width, height, expected):
+    assert fit_image_scale(requested, width, height) == expected
 
 
 def test_publication_keeps_previous_snapshot(tmp_path):
@@ -271,3 +284,42 @@ def test_notes_exclude_embedded_quiz_widgets():
 
 def test_typographic_dashes_match_tex_punctuation():
     assert norm('Health—not just disease')==norm('Health---not just disease')
+    assert norm('20 °C') == norm('20 ◦C')
+
+
+def test_reference_lines_exclude_embedded_quiz():
+    page = Mock()
+    page.rect.height = 800
+    def line(text, y): return {'bbox': (0, y, 100, y + 10), 'spans': [{'text': text, 'size': 10, 'font': 'Arial'}]}
+    page.get_text.return_value = {'blocks': [{'lines': [
+        line('Notes before quiz.', 100), line('MULTIPLE CHOICE QUESTION', 120),
+        line('Try yourself: A question?', 140), line('An option.', 160),
+        line('View Solution', 180), line('Notes after quiz.', 200),
+    ]}]}
+    assert reference_lines(page) == ['Notes before quiz.', 'Notes after quiz.']
+
+
+def test_rendered_text_ignores_page_furniture_inside_a_paragraph():
+    class Rect:
+        height = 800
+
+    class Page:
+        rect = Rect()
+        def __init__(self, lines): self.lines = lines
+        def get_text(self, kind):
+            assert kind == 'dict'
+            return {'blocks': [{'lines': [
+                {'bbox': (0, y, 100, y + 10), 'spans': [{'text': text}]}
+                for y, text in self.lines
+            ]}]}
+
+    doc = [
+        Page([(700, 'Temperature often affects how much solute a solvent can dissolve.')]),
+        Page([(40, '10'), (60, 'Chapter 1. Solutes and Solutions'),
+              (90, 'solubility increases with temperature.'), (300, 'Effect of temperature')]),
+    ]
+    page_range = {'start_page': 1, 'end_page': 2}
+    text = rendered_text(doc, page_range, ['Solutes and Solutions', 'Effect of temperature'])
+    assert norm('Temperature often affects how much solute a solvent can dissolve. solubility increases with temperature.') in text
+    assert norm('Chapter 1. Solutes and Solutions') not in text
+    assert norm('Effect of temperature') in text

@@ -11,12 +11,16 @@ sys.path.insert(0, str(ROOT / 'stage2'))
 import inline_content as inline
 from build_support import ValidationError
 
-ARTIFACT = re.compile(r'edurev|durev|^\d+\s*(?:of|/)\s*\d+$|^\d{2}/\d{2}/\d{2}|^https?://|^Firefox$|^view (solution|more)', re.I)
+ARTIFACT = re.compile(
+    r'edurev|durev|^edur$|table of contents|^chapter notes\s*:|chapter notes\s*\|\s*science class|'
+    r'^\d+\s*(?:of|/)\s*\d+$|^\d{2}/\d{2}/\d{2}|^https?://|^Firefox$|'
+    r'^view (solution|more)|multiple choice question|^try yourself:|short-answer-questions-.*/', re.I)
 NORMALIZATION = 'NFKC; ligatures; lowercase; whitespace/line-wrap joins; discretionary hyphens; equivalent math symbols; list markers and standalone bold section numbers; punctuation removal. Full normalized lines, never prefixes.'
 
 
 def norm(text):
     text = unicodedata.normalize('NFKC', text).lower().replace('\u00ad', '')
+    text = text.replace('◦', '°')
     text = re.sub(r'--+|[–—]', '', text)
     text = re.sub(r'(\w)-\s*\n\s*(\w)', r'\1\2', text)
     for symbol, macro in sorted(inline.SYMBOLS.items(), key=lambda pair: -len(pair[1])):
@@ -103,14 +107,40 @@ def coverage(lines, target, chapter, label, page_range):
 
 def reference_lines(page):
     lines = []
+    in_quiz = False
+    positioned = []
     for block in page.get_text('dict')['blocks']:
         for line in block.get('lines', []):
             value = ''.join(span['text'] for span in line['spans']).strip()
             y0, y1 = line['bbox'][1], line['bbox'][3]
+            positioned.append((y0, line['bbox'][0], y1, value, line))
+    for y0, _, y1, value, line in sorted(positioned):
+        if re.search(r'multiple choice question|^try yourself:', value, re.I):
+            in_quiz = True
+        if in_quiz:
+            if re.match(r'^view solution', value, re.I): in_quiz = False
+            continue
+        if value:
             if value.isdigit() and (y0 < 45 or y1 > page.rect.height - 55): continue
             if re.fullmatch(r'\d+(?:\.\d+)+', value) and any(span['size'] > 13 or 'bold' in span['font'].lower() for span in line['spans']): continue
-            if value: lines.append(value)
+            lines.append(value)
     return lines
+
+
+def generated_text(doc, page_range):
+    lines = []
+    for page_number in range(page_range['start_page'] - 1, page_range['end_page']):
+        page = doc[page_number]
+        for block in page.get_text('dict')['blocks']:
+            for line in block.get('lines', []):
+                value = ''.join(span['text'] for span in line['spans']).strip()
+                y0, y1 = line['bbox'][1], line['bbox'][3]
+                in_margin = y0 < 80 or y1 > page.rect.height - 35
+                running_heading = (re.match(r'^\d*\s*chapter\s+\d+\.\s+', value, re.I) or
+                                   re.match(r'^\d+(?:\.\d+)+\s+\S', value))
+                if re.fullmatch(r'\d+', value) or (in_margin and running_heading): continue
+                if value: lines.append(value)
+    return '\n'.join(lines)
 
 
 def validate_reference(reference, chapters, outputs, threshold=.95, mapping=None):
@@ -129,7 +159,7 @@ def validate_reference(reference, chapters, outputs, threshold=.95, mapping=None
                 output_ranges = map_pdf(generated, chapters, generated=True)
                 for r in output_ranges:
                     lines, source_range = source[r['chapter']]
-                    text = '\n'.join(generated[p].get_text() for p in range(r['start_page']-1, r['end_page']))
+                    text = generated_text(generated, r)
                     rows.append(coverage(lines, text, r['chapter'], label, source_range))
     return rows
 

@@ -86,6 +86,11 @@ presented as completed modules. Previous successful output is unchanged.
 Successful replacements retain the old module as `<module>.previous-<timestamp>`.
 Review and remove old diagnostics/snapshots manually when no longer needed.
 
+Generated pages use natural bottom spacing. Content diagrams preserve their
+aspect ratio and source order, retain smaller source-requested sizes, and are
+limited to a balanced box of about 52% text width and 30% usable page height.
+Cover and chapter-heading artwork remains controlled by the templates.
+
 Publication uses an exclusive lock. If interrupted during publication, inspect
 `.<module>.publish.lock`, the staging directory, and the previous snapshot before
 removing the stale lock or restoring the previous directory.

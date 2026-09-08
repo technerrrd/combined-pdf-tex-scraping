@@ -324,6 +324,7 @@ TEX_PREAMBLE = r"""\documentclass[12pt,a4paper]{book}
 \geometry{margin=2.5cm}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{4pt}
+\raggedbottom
 
 \begin{document}
 """
@@ -430,6 +431,9 @@ LYX_HEADER = """\
 \\save_transient_properties true
 \\origin unavailable
 \\textclass book
+\\begin_preamble
+\\raggedbottom
+\\end_preamble
 \\use_default_options true
 \\maintain_unincluded_children false
 \\language english

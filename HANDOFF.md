@@ -2,10 +2,10 @@
 
 ## Current objective and branch
 
-- Implemented the approved reliable note-generation plan (points 2, 4, 5, 6, 7).
-- Branch: dev, tracking origin/dev; feature commit 6ddbc663d1d02aff1b607ca601af043181e3d026.
+- Implemented reliable note generation plus balanced page spacing and diagram sizing.
+- Branch: dev, tracking origin/dev.
 - Working in the Git clone; the downloaded source folder remains unchanged.
-- User authorized the push. Reliability changes were committed and pushed to origin/dev on 2026-09-08.
+- User authorized pushing the balanced-layout changes to origin/dev. Earlier reliability changes were pushed on 2026-09-08.
 
 ## Completed work and decisions
 
@@ -20,6 +20,10 @@
 - Preserved legacy currency behavior using tfrupee. Direct TeX images stay in source order; LyX exports use the pdfLaTeX format to avoid unnecessary EPS conversion.
 - Added regression fixtures, offline tests, compiler acceptance testing, and GitHub Actions jobs for Windows/Linux offline tests and Linux compiler integration.
 - Added README.md; updated AGENTS.md and migrated CLAUDE.md to v4.1. Legacy fallback instructions remain available.
+- Added natural bottom spacing to TeX, themed LyX, and fallback LyX output so short pages do not stretch their paragraphs and lists.
+- Content diagrams are sized after decoding from their real dimensions, retain smaller source-requested sizes, and are capped at about 52% text width and 30% usable page height without cropping, distortion, or reordering.
+- Live-PDF validation now ignores page furniture and embedded EduRev quiz controls while retaining separate heading and prose checks; equivalent degree glyphs normalize consistently.
+- Updated README.md and CLAUDE.md v4.2 with the durable layout defaults.
 
 ## Tests and results
 
@@ -31,13 +35,17 @@
 - Unit tests cover compiler failures/timeouts, interrupted cache writes, publication rollback, ambiguous/duplicate mappings, scanned references, full-line mismatches, 95% boundaries, math rejection, lists/tables/images, and legacy DOCX/currency rendering.
 - Rendered fixture pages reviewed: cover, contents, body, equations, tables, image placement, and nested lists. Existing book-style blank verso pages remain intentional.
 - Python dependency check passed; source syntax and CI YAML checked; git diff --check passed.
-- GitHub-hosted CI has not run because nothing has been pushed. Linux compilers are not installed locally; compiler acceptance ran on Windows.
+- GitHub-hosted CI status for the balanced-layout change has not yet been observed. Linux compilers are not installed locally; compiler acceptance ran on Windows.
+- Windows Python 3.12 after the balanced-layout change: 54 regular tests passed; one integration-marked test was intentionally deselected from that run.
+- Windows LyX 2.4 / TeX Live 2025 after the balanced-layout change: the explicit compiler integration test passed in 61.64 seconds.
+- Class 8 Science Chapter 9 was rebuilt from the validated URL cache. Parsed, TeX-PDF, and LyX-PDF reference coverage each reached 98.93% across reference pages 1-20; structural checks found 36 headings, 40 lists, and all 20 ordered images.
+- Visually reviewed every page of both Chapter 9 PDFs plus full-size detail pages. Section 1.3 uses normal spacing, diagrams remain readable and uncropped, and page counts decreased from 20 to 18 for TeX and from 19 to 16 for LyX.
 
 ## Known limits and next steps
 
-- Representative real EduRev links and reference PDFs are still needed to calibrate real-site coverage and content-root behavior. Fixtures are synthetic; scores are diagnostic, not proof of perfect fidelity.
-- First live test used Class 8 Chapter 3, Health: The Ultimate Treasure. The page contained 17 headings, 44 note paragraphs, 45 lists with 143 items, and 26 images. The parser now skips EduRev's navigation table and embedded quiz widgets, and LyX export rewrites build-local absolute PNG paths to portable paths.
-- The live chapter is not yet published: strict rendered-text validation treats three em-dash clauses as missing because TeX extracts the dash differently. Fix normalization and rerun the complete live build before delivering that chapter.
+- Class 8 Chapter 9 is published under the ignored `stage2/output/Class8-Ch9-Solutes/` directory with editable TeX/LyX, both PDFs, compiler logs, manifest, and validation reports.
+- Three reference-only lines remain unmatched: one diagram caption and two wrapped practice-link fragments. Coverage remains above the required threshold; the score is diagnostic rather than proof of perfect fidelity.
+- Class 8 Chapter 3 was an earlier calibration run and has not been republished after the newer normalization fixes.
 - Unsupported equations and complex HTML table spans/nesting fail for review. No OCR, formula-image transcription, or inferred equations from prose is performed.
 - HTML question-bank detection and expanded fallback equation extraction are outside this change.
 - Direct TeX retains a plain book design while LyX retains the Legrand theme; theme unification was excluded.
