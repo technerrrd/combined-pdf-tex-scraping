@@ -3,9 +3,9 @@
 ## Current objective and branch
 
 - Implemented the approved reliable note-generation plan (points 2, 4, 5, 6, 7).
-- Branch: dev, created from origin/main at ff72e1167c8ee44e7932d8b0ae4837a2ba990305.
+- Branch: dev, tracking origin/dev; feature commit 6ddbc663d1d02aff1b607ca601af043181e3d026.
 - Working in the Git clone; the downloaded source folder remains unchanged.
-- User authorized committing and pushing the current work to the new dev branch.
+- User authorized the push. Reliability changes were committed and pushed to origin/dev on 2026-09-08.
 
 ## Completed work and decisions
 
