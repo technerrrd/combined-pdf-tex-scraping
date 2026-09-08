@@ -1,0 +1,32 @@
+name: Pipeline validation
+on: [push, pull_request]
+jobs:
+  offline:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pytest -q
+  compiler-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get update && sudo apt-get install -y lyx texlive-latex-extra texlive-fonts-extra texlive-science poppler-utils
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pytest -q -m integration --basetemp=tmp/ci-integration
+        env:
+          QT_QPA_PLATFORM: offscreen
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compiler-diagnostics
+          path: tmp/ci-integration

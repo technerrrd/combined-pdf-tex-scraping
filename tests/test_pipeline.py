@@ -1,0 +1,273 @@
+import io
+from pathlib import Path
+from unittest.mock import Mock
+import pytest
+import requests
+from PIL import Image
+import build_support as support
+import inline_content as inline
+from html_source import parse_html
+from scrape_chapters import arguments, module_name, select_chapters
+from validate_against_pdf import coverage, map_pdf, validate_ranges, norm
+
+
+def response(status=200, content=b'good', headers=None):
+    r = Mock(status_code=status, content=content, headers=headers or {})
+    if status >= 400: r.raise_for_status.side_effect = requests.HTTPError(str(status))
+    return r
+
+
+def test_cache_validated_atomic_and_offline(tmp_path):
+    session = Mock(); session.get.return_value = response()
+    path = support.cache_path(tmp_path, 'https://a/ch1', 'pages')
+    validate = lambda data: None if data == b'good' else (_ for _ in ()).throw(ValueError('bad'))
+    assert support.cached_fetch(session, 'https://a/ch1', path, validate) == b'good'
+    session.get.reset_mock()
+    assert support.cached_fetch(session, 'https://a/ch1', path, validate, offline=True) == b'good'
+    session.get.assert_not_called()
+    path.write_bytes(b'bad')
+    with pytest.raises(support.BuildError, match='invalid cached'): support.cached_fetch(session, 'url', path, validate, offline=True)
+    assert support.cache_path(tmp_path, 'https://b/ch1', 'pages') != path
+
+
+def test_retries_and_refresh(tmp_path, monkeypatch):
+    sleeps = []; monkeypatch.setattr(support.time, 'sleep', sleeps.append)
+    session = Mock(); session.get.side_effect = [response(429, headers={'Retry-After':'3'}), requests.Timeout(), response()]
+    path = tmp_path/'page'; path.write_bytes(b'old')
+    assert support.cached_fetch(session, 'url', path, lambda d: None, refresh=True) == b'good'
+    assert sleeps == [3, 2]
+    assert session.get.call_count == 3
+
+
+@pytest.mark.parametrize('status', [401,403,404,500])
+def test_failed_download_does_not_replace_cache(tmp_path, monkeypatch, status):
+    monkeypatch.setattr(support.time, 'sleep', lambda _: None)
+    session=Mock(); session.get.return_value=response(status)
+    path=tmp_path/'page'; path.write_bytes(b'old')
+    with pytest.raises(support.BuildError): support.cached_fetch(session,'url',path,lambda _:None,refresh=True)
+    assert path.read_bytes() == b'old'
+    assert session.get.call_count == (3 if status == 500 else 1)
+
+
+def test_atomic_write_failure_preserves_old(tmp_path,monkeypatch):
+    path=tmp_path/'cache'; path.write_bytes(b'old')
+    monkeypatch.setattr(support.os,'replace',Mock(side_effect=OSError('interrupted')))
+    with pytest.raises(OSError): support.atomic_write(path,b'new')
+    assert path.read_bytes()==b'old'
+    assert list(tmp_path.iterdir())==[path]
+
+
+def test_offline_missing_and_corrupt_image(tmp_path):
+    with pytest.raises(support.BuildError,match='offline cache miss'): support.cached_fetch(Mock(),'url',tmp_path/'none',lambda _:None,offline=True)
+    with pytest.raises(OSError): support.validate_image(b'html error')
+    data=io.BytesIO(); Image.new('RGB',(10,10)).save(data,format='PNG'); support.validate_image(data.getvalue())
+
+
+@pytest.mark.parametrize('html',['<title>Access denied</title><p>paywall</p>','<h2>Empty</h2>','<input type=password><p>Login</p>'])
+def test_blocked_and_empty(html):
+    with pytest.raises(ValueError): parse_html(html)
+
+
+def test_html_order_spacing_tables_and_lists():
+    els=parse_html('<article><h2>1. Heading</h2><p><strong>active</strong> and plain<p>Before<img src="https://x/a_lg.jpg">After<ul><li>Parent<ol><li>Nested</ol><li>Last</ul><table><tr><td>CO<sub>2</sub></td></tr></table></article>')
+    assert els[0]['text']=='Heading'
+    assert els[1]['text']=='active and plain'
+    assert [e['type'] for e in els[2:5]]==['body','image','body']
+    lists=[e for e in els if e['type']=='list']
+    assert [(e['ordered'],e['items'][0][0]) for e in lists]==[(False,0),(True,1),(False,0)]
+    assert els[-1]['rows'][0][0][-1]['kind']=='sub'
+
+
+@pytest.mark.parametrize('source,expected', [('CO₂','textsubscript{2}'),('x²','textsuperscript{2}'),('α → β',r'\alpha'),(r'\(\frac{a}{b}\)',r'\frac{a}{b}'),(r'\[\sqrt{x}\]',r'\sqrt{x}'),('Price $5 and 50%','\\$5')])
+def test_notation(source,expected):
+    runs=inline.text_runs(source)
+    assert expected in inline.tex(runs)
+    if any(s['kind']=='math' for s in runs): assert '\\begin_inset Formula' in inline.lyx(runs)
+
+
+def test_mathml_and_annotation():
+    html='<p><math><mfrac><mi>a</mi><msqrt><mi>b</mi></msqrt></mfrac></math></p>'
+    assert r'\frac{a}{\sqrt{b}}' in inline.tex(parse_html(html)[0]['segments'])
+    html='<p><span class="katex"><span>duplicate</span><math><semantics><mi>x</mi><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span></p>'
+    runs=parse_html(html)[0]['segments']; assert len(runs)==1 and runs[0]['text']=='x^2'
+
+
+@pytest.mark.parametrize('formula',[r'\input{secret}',r'\write18{bad}',r'\begin{document}x\end{document}','{x',r'\newcommand{x}{y}'])
+def test_unsupported_math(formula):
+    with pytest.raises(ValueError): inline.check_math(formula)
+
+
+def test_unknown_mathml():
+    with pytest.raises(ValueError,match='Unsupported MathML'): parse_html('<p><math><maction><mi>x</mi></maction></math></p>')
+
+
+def test_full_line_coverage_and_boundary():
+    prefix='A sufficiently long sentence with a common beginning '
+    result=coverage([prefix+'correct ending'],prefix+'wrong ending',1,'tex',{})
+    assert result['coverage']==0
+    lines=[f'Unique statement number {i} ends here' for i in range(20)]
+    assert coverage(lines,' '.join(lines[:19]),1,'tex',{})['coverage']==.95
+    assert norm('CO₂  ﬁne')==norm('CO2 fine')
+    with pytest.raises(support.ValidationError): coverage([], '',1,'tex',{})
+
+
+def test_mapping_never_guesses():
+    doc=Mock(); doc.get_toc.return_value=[[1,'Other',1]]; doc.__len__=Mock(return_value=10)
+    with pytest.raises(support.ValidationError,match='Ambiguous'): map_pdf(doc,[{'num':1,'name':'Missing'}])
+    chapters=[{'num':1,'name':'One'},{'num':2,'name':'Two'}]
+    ranges=[dict(chapter=1,start_page=1,end_page=2),dict(chapter=2,start_page=3,end_page=5)]
+    assert validate_ranges(ranges,chapters,5)==ranges
+    ranges[1]['start_page']=2
+    with pytest.raises(support.ValidationError): validate_ranges(ranges,chapters,5)
+
+
+def test_cli_selection_and_module():
+    chapters=[dict(num=i) for i in [3,1,2]]
+    assert [c['num'] for c in select_chapters(chapters,'1,3')]==[3,1]
+    with pytest.raises(ValueError): select_chapters(chapters,'4')
+    with pytest.raises(ValueError): select_chapters([dict(num=1),dict(num=1)],None)
+    with pytest.raises(ValueError): module_name(arguments(['--module','../bad']))
+    with pytest.raises(ValueError): module_name(arguments(['old','--module','new']))
+    assert module_name(arguments(['--links','MyNotes.txt']))=='MyNotes'
+
+
+def test_publication_rollback(tmp_path,monkeypatch):
+    old=tmp_path/'module'; old.mkdir(); (old/'good').write_text('old')
+    staged=tmp_path/'staged'; staged.mkdir()
+    original=Path.rename
+    def fail(self,target):
+        if self==staged: raise OSError('publication interrupted')
+        return original(self,target)
+    monkeypatch.setattr(Path,'rename',fail)
+    with pytest.raises(OSError): support.publish(staged,old)
+    assert (old/'good').read_text()=='old'
+
+def test_compiler_timeout_retains_diagnostics(tmp_path,monkeypatch):
+    import subprocess
+    monkeypatch.setattr(support.subprocess,'run',Mock(side_effect=subprocess.TimeoutExpired('compiler',1,output=b'partial')))
+    with pytest.raises(support.BuildError,match='timed out'): support.command(['compiler'],tmp_path,tmp_path/'compiler.log',timeout=1)
+    assert b'partial' in (tmp_path/'compiler.log').read_bytes()
+
+
+def test_compiler_missing_is_not_skipped(monkeypatch):
+    monkeypatch.setattr(support.shutil,'which',lambda _:None)
+    with pytest.raises(support.BuildError,match='Missing compiler'): support.executable('nonexistent-compiler')
+
+
+def test_unsupported_and_matrix_mathml():
+    for markup,expected in [('<mroot><mi>x</mi><mn>3</mn></mroot>',r'\sqrt[3]{x}'),('<msubsup><mi>x</mi><mn>1</mn><mn>2</mn></msubsup>','{x}_{1}^{2}'),('<mfenced><mi>x</mi><mi>y</mi></mfenced>',r'\left(x,y\right)'),('<mover><mi>x</mi><mo>^</mo></mover>',r'\hat{x}')]:
+        runs=parse_html('<p><math>'+markup+'</math></p>')[0]['segments']
+        assert expected in inline.tex(runs)
+    assert norm('a ≤ b') != norm('a ≥ b')
+    assert norm(r'a \leq b') == norm('a ≤ b')
+
+
+def test_mathjax_script_and_literal_escaping():
+    elements=parse_html('<p>Equation <script type="math/tex">x^2</script> here.</p>')
+    assert r'$x^2$' in inline.tex(elements[0]['segments'])
+    assert inline.escape('\\{50%}')==r'\textbackslash{}\{50\%\}'
+    assert inline.plain(parse_html('<p>Visible<!-- hidden --> text.</p>')[0]['segments'])=='Visible text.'
+
+
+def test_docx_fallback_legacy_segments(tmp_path):
+    from docx import Document
+    import convert
+    document=Document(); document.add_paragraph('A plain paragraph with '); document.paragraphs[0].add_run('bold text').bold=True
+    source=tmp_path/'source.docx'; document.save(source)
+    elements,*_=convert.parse_docx(source)
+    media=tmp_path/'media'; media.mkdir()
+    convert.write_tex(elements,tmp_path/'fallback.tex',media)
+    convert.write_lyx(elements,tmp_path/'fallback.lyx',media)
+    assert r'\textbf{bold text}' in (tmp_path/'fallback.tex').read_text()
+    assert '\\series bold' in (tmp_path/'fallback.lyx').read_text()
+
+
+def test_publication_keeps_previous_snapshot(tmp_path):
+    destination=tmp_path/'module';destination.mkdir();(destination/'file').write_text('old')
+    staged=tmp_path/'staged';staged.mkdir();(staged/'file').write_text('new')
+    support.publish(staged,destination)
+    assert (destination/'file').read_text()=='new'
+    assert next(tmp_path.glob('module.previous-*')).joinpath('file').read_text()=='old'
+
+
+def test_duplicate_pdf_markers_and_scanned_reference(tmp_path):
+    import pymupdf
+    from validate_against_pdf import validate_reference
+    path=tmp_path/'empty.pdf'
+    with pymupdf.open() as doc:
+        doc.new_page();doc.set_toc([[1,'Chapter Notes: One',1],[1,'Chapter Notes: One',1]])
+        assert map_pdf(doc,[dict(num=1,name='One')])==[dict(chapter=1,start_page=1,end_page=1)]
+        doc.save(path)
+    with pytest.raises(support.ValidationError,match='no extractable'):
+        validate_reference(path,[dict(num=1,name='One',elements=[])],{})
+
+def test_images_inside_formatted_lists_are_not_lost():
+    elements=parse_html('<article><p>Introduction.</p><ul><li><strong>Before <span><img src="https://x/test_lg.jpg"></span> after</strong></li></ul></article>')
+    assert [e['type'] for e in elements]==['body','list','image','list']
+    assert elements[1]['items'][0][1][0]['bold']
+    assert elements[3]['items'][0][1][0]['bold']
+
+
+def test_table_spans_fail_instead_of_flattening():
+    with pytest.raises(ValueError,match='Complex table'):
+        parse_html('<table><tr><td colspan="2">Merged cell</td></tr></table>')
+
+
+def test_compiler_failure_does_not_publish(tmp_path,monkeypatch):
+    import scrape_chapters
+    from build_support import atomic_write,cache_path
+    url='https://example.org/t/1/Chapter-Notes-One'
+    links=tmp_path/'links';links.write_text(url+' - Chapter1')
+    output=tmp_path/'out';good=output/'notes';good.mkdir(parents=True);(good/'original').write_text('keep')
+    cache=tmp_path/'cache';atomic_write(cache_path(cache,url,'pages'),b'<p>A complete sample paragraph.</p>')
+    monkeypatch.setattr(support,'preflight',lambda: {})
+    monkeypatch.setattr(support,'compile_documents',Mock(side_effect=support.BuildError('compiler failure')))
+    args=['--links',str(links),'--module','notes','--cache-dir',str(cache),'--output-dir',str(output),'--offline']
+    assert scrape_chapters.main(args)==1
+    assert (good/'original').read_text()=='keep'
+    assert any('compiler failure' in p.read_text() for p in output.glob('notes-*/report.txt'))
+
+
+def test_html_invalid_fetch_not_cached(tmp_path):
+    session=Mock();session.get.return_value=response(content=b'<title>Access denied</title><p>Blocked</p>')
+    path=tmp_path/'cache'
+    with pytest.raises(support.BuildError):support.cached_fetch(session,'url',path,lambda data:parse_html(data.decode()))
+    assert not path.exists()
+
+
+def test_retry_after_http_date():
+    from datetime import datetime,timezone,timedelta
+    from email.utils import format_datetime
+    delay=support.retry_delay(format_datetime(datetime.now(timezone.utc)+timedelta(seconds=20)),0)
+    assert 18 <= delay <= 20
+
+def test_legacy_currency_rendering():
+    assert inline.tex([('Rs. 250',False)])==r'\rupee~ 250'
+    assert '\\begin_inset ERT' in inline.lyx([('₹250',False)])
+
+def test_two_currency_amounts_are_not_inferred_as_equations():
+    runs=inline.text_runs('Prices are $5 and $10.')
+    assert all(s['kind']=='text' for s in runs)
+    assert inline.tex(runs)==r'Prices are \$5 and \$10.'
+
+def test_reference_counts_the_generated_chapter_title(tmp_path):
+    import pymupdf
+    from validate_against_pdf import validate_reference
+    source=tmp_path/'reference.pdf'
+    with pymupdf.open() as doc:
+        page=doc.new_page();page.insert_text((72,72),'Unique Heading\nA substantive body sentence.')
+        doc.set_toc([[1,'Unique Heading',1]]);doc.save(source)
+    chapters=[dict(num=1,name='Unique Heading',elements=[dict(type='body',text='A substantive body sentence.',segments=[('A substantive body sentence.',False)])])]
+    assert validate_reference(source,chapters,{})[0]['coverage']==1
+
+def test_edurev_navigation_table_is_skipped_before_span_validation():
+    result=parse_html('<article><table class="tbl_cntnt"><tr><td>Table of Contents</td></tr><tr><td colspan="2">Navigation</td></tr></table><h2>Chapter topic</h2><p>Substantive chapter content.</p></article>')
+    assert [e['type'] for e in result]==['heading','body']
+
+def test_notes_exclude_embedded_quiz_widgets():
+    elements=parse_html('<article><p>Real notes.</p><div id="content_questions"><p>Question and solution widget</p></div><p>More notes.</p></article>')
+    assert [e['text'] for e in elements]==['Real notes.','More notes.']
+
+
+def test_typographic_dashes_match_tex_punctuation():
+    assert norm('Health—not just disease')==norm('Health---not just disease')

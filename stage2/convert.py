@@ -15,6 +15,7 @@ import shutil
 import zipfile
 import logging
 import textwrap
+import inline_content as inline
 from datetime import datetime
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -109,38 +110,12 @@ def strip_heading_numbering(text: str) -> str:
 # LaTeX helpers
 # ---------------------------------------------------------------------------
 def tex_escape(text: str) -> str:
-    """Escape LaTeX special characters."""
-    replacements = [
-        ('\\', r'\textbackslash{}'),
-        ('&',  r'\&'),
-        ('%',  r'\%'),
-        ('$',  r'\$'),
-        ('#',  r'\#'),
-        ('{',  r'\{'),
-        ('}',  r'\}'),
-        ('~',  r'\textasciitilde{}'),
-        ('^',  r'\^{}'),
-        ('_',  r'\_'),
-        ('₹',  r'\rupee~'),
-        ('Rs.', r'\rupee~'),
-        ('INR', r'\rupee~'),
-    ]
-    result = text
-    for old, new in replacements:
-        if old == '\\':
-            result = result.replace(old, new)
-            break
-    for old, new in replacements[1:]:
-        result = result.replace(old, new)
-    return result
+    return inline.escape(text).replace('₹', r'\rupee~').replace('Rs.', r'\rupee~').replace('INR', r'\rupee~')
+
 
 def render_tex_segments(segments) -> str:
-    """Render (text, bold) segments to LaTeX, applying \\textbf{} where bold."""
-    parts = []
-    for text, bold in segments:
-        escaped = tex_escape(text)
-        parts.append(f'\\textbf{{{escaped}}}' if bold else escaped)
-    return ''.join(parts)
+    return inline.tex(segments)
+
 
 # ---------------------------------------------------------------------------
 # Parse DOCX
@@ -340,9 +315,11 @@ TEX_PREAMBLE = r"""\documentclass[12pt,a4paper]{book}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage{amssymb}
+\usepackage{amsmath}
 \usepackage{enumitem}
-\usepackage{rupee}
+\usepackage{tfrupee}
 \usepackage{geometry}
 \geometry{margin=2.5cm}
 \setlength{\parindent}{0pt}
@@ -354,6 +331,7 @@ TEX_PREAMBLE = r"""\documentclass[12pt,a4paper]{book}
 def write_tex(elements, out_path: Path, media_dir: Path):
     lines = [TEX_PREAMBLE]
     in_enum = False
+    list_stack = []
 
     def close_enum():
         nonlocal in_enum
@@ -367,13 +345,18 @@ def write_tex(elements, out_path: Path, media_dir: Path):
             lines.append(r'\begin{enumerate}' + '\n')
             in_enum = True
 
+    def close_lists():
+        while list_stack:
+            lines.append('\\end{' + list_stack.pop() + '}\n')
+
     for el in elements:
         t = el['type']
+        if t != 'list': close_lists()
 
         if t == 'heading':
             close_enum()
             lvl = el['level']
-            txt = tex_escape(el['text'])
+            txt = render_tex_segments(el.get('segments', [(el['text'], False)]))
             cmd = {'chapter': 'chapter', 'section': 'section',
                    'subsection': 'subsection', 'subsubsection': 'subsubsection'}.get(lvl, 'subsection')
             lines.append(f'\\{cmd}{{{txt}}}\n')
@@ -398,7 +381,7 @@ def write_tex(elements, out_path: Path, media_dir: Path):
             fname = el['filename']
             scale = el['scale']
             img_rel = f'media/{fname}'
-            lines.append('\\begin{figure}[h]\n')
+            lines.append('\\begin{figure}[H]\n')
             lines.append('\\centering\n')
             lines.append(f'\\includegraphics[width={scale}\\textwidth]{{{img_rel}}}\n')
             lines.append('\\end{figure}\n\n')
@@ -406,19 +389,18 @@ def write_tex(elements, out_path: Path, media_dir: Path):
         elif t == 'list':
             close_enum()
             env = 'enumerate' if el.get('ordered') else 'itemize'
-            depth = 0
             for d, segs in el['items']:
-                while depth < d + 1:
-                    lines.append(f'\\begin{{{env}}}\n')
-                    depth += 1
-                while depth > d + 1:
-                    lines.append(f'\\end{{{env}}}\n')
-                    depth -= 1
-                lines.append(f'\\item {render_tex_segments(segs)}\n')
-            while depth > 0:
-                lines.append(f'\\end{{{env}}}\n')
-                depth -= 1
-            lines.append('\n')
+                while len(list_stack) > d + 1:
+                    lines.append('\\end{' + list_stack.pop() + '}\n')
+                if len(list_stack) == d + 1 and list_stack[-1] != env:
+                    lines.append('\\end{' + list_stack.pop() + '}\n')
+                while len(list_stack) < d + 1:
+                    if len(list_stack) < d:
+                        lines.append('\\begin{' + env + '}\n\\item[] ')
+                    else:
+                        lines.append('\\begin{' + env + '}\n')
+                    list_stack.append(env)
+                lines.append('\\item ' + render_tex_segments(segs) + '\n')
 
         elif t == 'table':
             close_enum()
@@ -428,9 +410,10 @@ def write_tex(elements, out_path: Path, media_dir: Path):
             lines.append('\\begin{tabular}{|' + 'l|' * ncol + '}\n\\hline\n')
             for row in rows:
                 row = row + [''] * (ncol - len(row))
-                lines.append(' & '.join(tex_escape(c) for c in row) + ' \\\\\n\\hline\n')
+                lines.append(' & '.join((render_tex_segments(c) if isinstance(c, list) else tex_escape(c)) for c in row) + ' \\\\\n\\hline\n')
             lines.append('\\end{tabular}\n\\end{center}\n\n')
 
+    close_lists()
     close_enum()
     lines.append(r'\end{document}' + '\n')
 
@@ -887,6 +870,8 @@ def _draw_atom(ax):
 
 def generate_chapter_image(chapter_name: str, out_path: Path) -> None:
     """Generate a 1840×920 chapter banner with a thematic scientific diagram."""
+    import matplotlib
+    matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 
     fig, ax = _setup_fig()
@@ -943,22 +928,8 @@ def lyx_escape(text: str) -> str:
     return text.replace('\\', '\\backslash\n')
 
 def render_lyx_segments(segments) -> str:
-    """
-    Render (text, bold) segments as LyX inline markup.
-    Uses \\series bold / \\series default switches only where needed.
-    """
-    parts = []
-    prev_bold = False
-    for text, bold in segments:
-        if bold and not prev_bold:
-            parts.append('\\series bold\n')
-        elif not bold and prev_bold:
-            parts.append('\\series default\n')
-        parts.append(lyx_escape(text))
-        prev_bold = bold
-    if prev_bold:
-        parts.append('\n\\series default\n')
-    return ''.join(parts)
+    return inline.lyx(segments)
+
 
 def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = None):
     if template_dir is not None:
@@ -997,7 +968,7 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
                 generate_chapter_image(el['text'], out_path.parent / img_name)
                 lines.append(chapterimage_block(img_name))
             lines.append(f'\\begin_layout {layout}\n')
-            lines.append(f'{el["text"]}\n')
+            lines.append(render_lyx_segments(el.get('segments', [(el['text'], False)])) + '\n')
             lines.append('\\end_layout\n\n')
 
         elif t == 'body':
@@ -1053,15 +1024,18 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
             close_enum()
             rows = el['rows']
             ncol = max(len(r) for r in rows)
-            tex = ['\\begin{tabular}{|' + 'l|' * ncol + '}', '\\hline']
+            lines.append('\\begin_layout Standard\n\\align center\n\\begin_inset Tabular\n')
+            lines.append(f'<lyxtabular version="3" rows="{len(rows)}" columns="{ncol}">\n')
+            lines.append('<features tabularvalignment="middle">\n')
+            lines.extend('<column alignment="left" valignment="top" width="0pt">\n' for _ in range(ncol))
             for row in rows:
-                row = row + [''] * (ncol - len(row))
-                tex.append(' & '.join(tex_escape(c) for c in row) + ' \\\\')
-                tex.append('\\hline')
-            tex.append('\\end{tabular}')
-            lines.append('\\begin_layout Standard\n\\align center\n')
-            lines.append(ert(lyx_escape('\n'.join(tex)) + '\n'))
-            lines.append('\\end_layout\n\n')
+                lines.append('<row>\n')
+                for cell in row + [''] * (ncol-len(row)):
+                    lines.append('<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">\n\\begin_inset Text\n\\begin_layout Plain Layout\n')
+                    lines.append(render_lyx_segments(cell if isinstance(cell, list) else [(cell, False)]))
+                    lines.append('\n\\end_layout\n\\end_inset\n</cell>\n')
+                lines.append('</row>\n')
+            lines.append('</lyxtabular>\n\\end_inset\n\n\\end_layout\n\n')
 
     if template_dir is not None:
         lines.append('\\end_body\n\\end_document\n')

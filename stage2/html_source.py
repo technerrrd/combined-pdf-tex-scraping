@@ -1,230 +1,144 @@
-#!/usr/bin/env python3
-"""v4.0 HTML front-end: parse an EduRev chapter page into Stage 2 element dicts.
-
-The scraped EduRev page is the original source the PDF/DOCX were derived from — it is
-server-rendered, complete, and carries real semantics (h2/h3/h4 headings, <strong>
-bold, <ul><li> lists incl. nesting, inline _lg.jpg images in reading order, <table>s).
-This module reconstructs that into the SAME element schema Stage 2's writers consume,
-plus a new 'list' element type, so `write_tex` / `write_lyx` (template + banners) can
-be reused unchanged apart from list support.
-
-Element schema produced (matches stage2/convert.py):
-  {'type':'heading','level':'section'|'subsection'|'subsubsection','text':str}
-  {'type':'body','text':str,'segments':[(text,bold)..]}
-  {'type':'list','ordered':bool,'items':[(depth,segments)..]}      # NEW
-  {'type':'image','filename':str,'url':str,'scale':float}
-  {'type':'table','rows':[[cell,..],..]}
-"""
-
-import os
+"""HTML5 chapter parser preserving source order and explicit scientific notation."""
 import re
-
-import requests
+from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup, Tag
+import inline_content as inline
 
-_UA = ('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
-       '(KHTML, like Gecko) Chrome/120.0 Safari/537.36')
-
+_UA = 'Mozilla/5.0 (compatible; NotesBuilder/4.1)'
 _HEADINGS = {'h2': 'section', 'h3': 'subsection', 'h4': 'subsubsection'}
-_BLOCK = set(_HEADINGS) | {'p', 'ul', 'ol', 'table', 'img'}
-_SCALES = [0.25, 0.4, 0.5, 0.6, 0.75]
-_NOISE_RE = re.compile(r'^(view more|view solution|join for free|table of contents'
-                       r'|explore courses|download|attempt test)\b', re.IGNORECASE)
-# Leading numbering prefixes to strip from headings (LaTeX auto-numbers) — mirrors
-# stage2/convert.py HEADING_NUM_RE: '1.' / '1.1' / 'Q1' / '(a)'
+_NOISE_RE = re.compile(r'^(view more|view solution|join for free|table of contents|explore courses|download|attempt test)\b', re.I)
 _HEADING_NUM_RE = re.compile(r'^(?:Q\d+\.?\s+|\d+(?:\.\d+)*\.?\s+|\([a-zA-Z0-9]+\)\s+)')
-
-# Typographic Unicode → ASCII/LaTeX-safe (pdflatex utf8 chokes on thin/zero-width spaces)
-_UNICODE_MAP = {
-    ' ': ' ', ' ': ' ', ' ': ' ', ' ': ' ', ' ': ' ', ' ': ' ',
-    '​': '', '‌': '', '‍': '', '﻿': '', '­': '',
-    '‘': "'", '’': "'", '“': '"', '”': '"',
-    '–': '--', '—': '---', '…': '...', '•': '',
-}
-# sub/superscripts and math/science symbols → ASCII (plain text; no $ _ ^ \ {} which
-# tex_escape would re-escape). Faithful math typesetting is a known follow-up.
-_UNICODE_MAP.update({
-    '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4',
-    '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
-    '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4',
-    '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9',
-    '→': ' -> ', '←': ' <- ', '↔': ' <-> ', '⇌': ' <=> ', '⟶': ' -> ',
-    '×': 'x', '÷': '/', '±': '+/-', '≈': '~', '≤': '<=', '≥': '>=', '≠': '!=',
-    '°': ' deg', '·': '.', '′': "'", '″': '"', '∴': 'therefore', '∞': 'infinity',
-})
-_UNICODE_RE = re.compile('|'.join(map(re.escape, _UNICODE_MAP)))
+_PUNCT = str.maketrans({'\u00ad': '', '\u200b': '', '\u200c': '', '\u200d': '', '\ufeff': '', '‘': "'", '’': "'", '“': '"', '”': '"', '–': '--', '—': '---', '…': '...'})
 
 
-def clean_text(s):
-    return _UNICODE_RE.sub(lambda m: _UNICODE_MAP[m.group()], s)
-
-
-# --------------------------------------------------------------------------- #
-# Fetch (cache) + locate content
-# --------------------------------------------------------------------------- #
-def fetch(url, cache_path=None):
-    """Fetch a page, caching to cache_path so converts are reproducible offline."""
-    if cache_path and os.path.exists(cache_path):
-        with open(cache_path, encoding='utf-8') as fh:
-            return fh.read()
-    html = requests.get(url, headers={'User-Agent': _UA}, timeout=30).text
-    if cache_path:
-        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-        with open(cache_path, 'w', encoding='utf-8') as fh:
-            fh.write(html)
-    return html
+def clean_text(text):
+    return text.translate(_PUNCT)
 
 
 def find_content_root(soup):
-    """Smallest ancestor containing (almost) all _lg.jpg content images."""
-    imgs = soup.find_all('img', src=lambda s: s and '_lg.jpg' in s)
-    if not imgs:
-        return soup.body or soup
-    cur, best = imgs[0], imgs[0]
-    for _ in range(12):
-        par = cur.find_parent()
-        if par is None:
-            break
-        best = par
-        if len(par.find_all('img', src=lambda s: s and '_lg.jpg' in s)) >= max(2, int(0.8 * len(imgs))):
-            break
-        cur = par
-    return best
+    # Images can precede explr_htmlcnt_dv; do not restrict to that div.
+    images = soup.find_all('img', src=lambda s: s and '_lg.jpg' in s)
+    if not images:
+        return soup.find('article') or soup.find('main') or soup.body or soup
+    current = images[0].parent
+    while current and current.name != 'body':
+        if len(current.find_all('img', src=lambda s: s and '_lg.jpg' in s)) == len(images) and current.find(['p', 'h2', 'ul', 'ol']):
+            return current
+        current = current.parent
+    return soup.body or soup
 
 
-# --------------------------------------------------------------------------- #
-# Inline runs / lists / tables
-# --------------------------------------------------------------------------- #
-def _segments(el):
-    """[(text, is_bold)] for inline content, preserving inter-element spacing.
-
-    Whitespace-only text nodes between inline tags are collapsed to a single trailing
-    space on the previous run (rather than dropped) — this fixes joins like
-    'active</strong>and' that lost the source space.
-    """
-    runs = []
-    for node in el.descendants:
-        if isinstance(node, Tag):
-            continue
-        raw = str(node)
-        if not raw.strip():
-            if runs and not runs[-1][0].endswith(' '):
-                runs[-1] = (runs[-1][0] + ' ', runs[-1][1])
-            continue
-        text = re.sub(r'\s+', ' ', clean_text(raw))
-        bold = any(p.name in ('strong', 'b') for p in node.parents)
-        runs.append((text, bold))
-    return _merge_runs(runs)
+def _segments(node):
+    runs = inline.from_html(node, any(getattr(p, 'name', None) in ('strong', 'b') for p in node.parents))
+    for item in runs:
+        if item['kind'] == 'text': item['text'] = clean_text(item['text'])
+    return runs
 
 
-def _merge_runs(runs):
-    """Coalesce adjacent runs of the same weight."""
-    out = []
-    for text, bold in runs:
-        if out and out[-1][1] == bold:
-            out[-1] = (out[-1][0] + text, bold)
-        else:
-            out.append((text, bold))
-    return out
+def _segments_text(runs):
+    return re.sub(r'\s+', ' ', inline.plain(runs)).strip()
 
 
-def _segments_text(segments):
-    return re.sub(r'\s+', ' ', ''.join(t for t, _ in segments)).strip()
+def pick_scale(width):
+    return min([.25, .4, .5, .6, .75], key=lambda s: abs(s - width / 700)) if width else .6
 
 
-def list_items(list_el, depth=0):
-    """Yield (depth, segments) per <li>, recursing into nested lists (keeps depth)."""
-    for li in list_el.find_all('li', recursive=False):
-        nested = li.find_all(['ul', 'ol'], recursive=False)
-        runs = []
-        for node in li.descendants:
-            if isinstance(node, Tag):
-                continue
-            if any(anc.name in ('ul', 'ol') for anc in node.parents if anc in li.descendants):
-                continue
-            raw = str(node)
-            if not raw.strip():
-                if runs and not runs[-1][0].endswith(' '):
-                    runs[-1] = (runs[-1][0] + ' ', runs[-1][1])
-                continue
-            text = re.sub(r'\s+', ' ', clean_text(raw))
-            bold = any(p.name in ('strong', 'b') for p in node.parents)
-            runs.append((text, bold))
-        runs = _merge_runs(runs)
-        if _segments_text(runs):
-            yield depth, runs
-        for sub in nested:
-            yield from list_items(sub, depth + 1)
-
-
-def table_rows(table):
-    rows = []
-    for tr in table.find_all('tr'):
-        cells = [clean_text(re.sub(r'\s+', ' ', c.get_text(' ', strip=True)))
-                 for c in tr.find_all(['td', 'th'])]
-        if cells:
-            rows.append(cells)
-    return rows
-
-
-def pick_scale(width_px):
-    if not width_px:
-        return 0.6
-    return min(_SCALES, key=lambda s: abs(s - width_px / 700.0))
-
-
-def _img_width_px(el):
-    m = re.search(r'width:\s*([0-9.]+)px', el.get('style', '') or '')
-    if m:
-        return float(m.group(1))
-    w = el.get('width')
-    return float(w) if w and str(w).isdigit() else None
-
-
-# --------------------------------------------------------------------------- #
-# Parse → elements
-# --------------------------------------------------------------------------- #
-def parse_html(html):
-    """Return Stage 2 element dicts (in reading order) from chapter page HTML."""
-    soup = BeautifulSoup(html, 'html5lib')   # HTML5 implied end-tags → clean sibling tree
+def parse_html(html, base_url=''):
+    soup = BeautifulSoup(html, 'html5lib')
+    title = soup.title.get_text(' ', strip=True) if soup.title else ''
+    if re.search(r'access denied|just a moment|sign in|log in|captcha|not found|forbidden', title, re.I) or soup.find('input', attrs={'type': 'password'}):
+        raise ValueError('Blocked, login or error page; chapter content unavailable')
     root = find_content_root(soup)
-    elements, consumed, img_seen = [], [], set()
+    elements = []
 
-    def inside_consumed(el):
-        return any(c in el.parents for c in consumed)
+    def image(node):
+        src = node.get('src', '')
+        if '_lg.jpg' not in src: return
+        url = urljoin(base_url, src)
+        if not url.startswith(('http://', 'https://')): raise ValueError(f'Invalid image URL: {url}')
+        width = re.search(r'width:\s*([\d.]+)px', node.get('style', ''))
+        width = float(width[1]) if width else float(node.get('width', 0)) if str(node.get('width', '')).isdigit() else 0
+        elements.append(dict(type='image', filename=urlparse(url).path.rsplit('/', 1)[-1], url=url, scale=pick_scale(width)))
 
-    for el in root.descendants:
-        name = getattr(el, 'name', None)
-        if name not in _BLOCK:
-            continue
-        if name == 'img':
-            src = el.get('src', '')
-            if '_lg.jpg' in src and src not in img_seen:
-                img_seen.add(src)
-                url = 'https:' + src if src.startswith('//') else src
-                elements.append({'type': 'image', 'filename': src.rsplit('/', 1)[-1],
-                                 'url': url, 'scale': pick_scale(_img_width_px(el))})
-            continue
-        if inside_consumed(el):
-            continue
+    def paragraph(node):
+        # Split around images so they stay between surrounding text.
+        runs = []
+        def flush():
+            nonlocal runs
+            text = _segments_text(runs)
+            if text and not _NOISE_RE.match(text): elements.append(dict(type='body', text=text, segments=runs))
+            runs = []
+        def visit(child):
+            if getattr(child, 'name', None) == 'img':
+                flush(); image(child)
+            elif getattr(child, 'name', None) and child.find('img'):
+                for c in child.children: visit(c)
+            else:
+                runs.extend(_segments(child))
+        for child in node.children: visit(child)
+        flush()
+
+    def walk(node, depth=0):
+        name = getattr(node, 'name', None)
+        if name is None: return
+        if name in ('nav', 'footer', 'header', 'style'): return
+        if node.get('id') == 'content_questions' or 'nq2_card' in node.get('class', []): return
+        if name == 'img': image(node); return
         if name in _HEADINGS:
-            txt = _HEADING_NUM_RE.sub('', clean_text(el.get_text(' ', strip=True))).strip()
-            if txt and not _NOISE_RE.match(txt):
-                elements.append({'type': 'heading', 'level': _HEADINGS[name], 'text': txt})
-        elif name == 'p':
-            segs = _segments(el)
-            txt = _segments_text(segs)
-            if txt and not _NOISE_RE.match(txt):
-                elements.append({'type': 'body', 'text': txt, 'segments': segs})
-        elif name in ('ul', 'ol'):
-            items = [(d, s) for d, s in list_items(el) if not _NOISE_RE.match(_segments_text(s))]
-            if items:
-                elements.append({'type': 'list', 'ordered': name == 'ol', 'items': items})
-            consumed.append(el)
-        elif name == 'table':
-            rows = table_rows(el)
-            flat = ' '.join(' '.join(r) for r in rows).lower()
-            if rows and 'table of contents' not in flat:   # skip auto-generated TOC
-                elements.append({'type': 'table', 'rows': rows})
-            consumed.append(el)
+            runs = _segments(node)
+            if runs and runs[0]['kind'] == 'text': runs[0]['text'] = _HEADING_NUM_RE.sub('', runs[0]['text'])
+            text = _segments_text(runs)
+            if text and not _NOISE_RE.match(text): elements.append(dict(type='heading', level=_HEADINGS[name], text=text, segments=runs))
+            return
+        if name == 'p': paragraph(node); return
+        if name in ('ul', 'ol'):
+            items = []
+            def flush():
+                nonlocal items
+                if items: elements.append(dict(type='list', ordered=name == 'ol', items=items)); items = []
+            for li in node.find_all('li', recursive=False):
+                runs = []
+                def visit_item(child):
+                    nonlocal runs
+                    child_name = getattr(child, 'name', None)
+                    if child_name in ('ul', 'ol', 'img'):
+                        if _segments_text(runs): items.append((depth, runs)); runs = []
+                        flush(); walk(child, depth + 1 if child_name != 'img' else depth)
+                    elif child_name and child.find(['img', 'ul', 'ol']):
+                        for nested in child.children: visit_item(nested)
+                    else:
+                        runs.extend(_segments(child))
+                for child in li.children: visit_item(child)
+                if _segments_text(runs) and not _NOISE_RE.match(_segments_text(runs)): items.append((depth, runs))
+            flush(); return
+        if name == 'table':
+            if 'tbl_cntnt' in node.get('class', []) and node.find(string=re.compile(r'^\s*Table of Contents\s*$', re.I)):
+                return
+            if node.find('table') or any(cell.get('rowspan', '1') != '1' or cell.get('colspan', '1') != '1' for cell in node.find_all(['td', 'th'])):
+                raise ValueError('Complex table spans/nesting require review; refusing to flatten cells')
+            rows = [[_segments(cell) for cell in row.find_all(['td', 'th'], recursive=False)] for row in node.find_all('tr')]
+            rows = [r for r in rows if r]
+            if rows and 'table of contents' not in ' '.join(_segments_text(c) for r in rows for c in r).lower():
+                elements.append(dict(type='table', rows=rows))
+            for img in node.find_all('img'): image(img)
+            return
+        if name in ('math', 'mjx-container') or 'katex' in node.get('class', []) or (name == 'script' and node.get('type', '').startswith('math/tex')):
+            runs = _segments(node)
+            elements.append(dict(type='body', text=_segments_text(runs), segments=runs)); return
+        if name == 'script': return
+        for child in node.children: walk(child, depth)
+    walk(root)
+    if not any(e['type'] in ('body', 'list', 'table') for e in elements):
+        raise ValueError('Empty chapter: no substantive content found')
     return elements
+
+
+def fetch(url, cache_path=None):
+    # Compatibility entry point; the primary orchestrator owns URL-keyed caches.
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'stage0'))
+    from build_support import cached_fetch
+    import requests
+    return cached_fetch(requests.Session(), url, Path(cache_path) if cache_path else None,
+                        lambda data: parse_html(data.decode('utf-8'), url)).decode('utf-8')

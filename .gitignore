@@ -35,3 +35,9 @@ stage2/*.docx
 
 # Claude internal memory (not project source)
 .claude/
+
+.venv/
+.pytest_cache/
+.builds/
+tmp/
+.venv-linux/
