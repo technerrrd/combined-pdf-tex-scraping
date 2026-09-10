@@ -101,7 +101,7 @@ def tex(segments):
         elif kind in ('sub', 'sup'):
             rendered = '\\text' + ('subscript' if kind == 'sub' else 'superscript') + '{' + escape(value) + '}'
         else:
-            rendered = escape(value).replace('₹', r'\rupee~').replace('Rs.', r'\rupee~').replace('INR', r'\rupee~')
+            rendered = escape(value).replace('Rs.', r'\rupee~').replace('INR', r'\rupee~')
         if s.get('bold'):
             rendered = r'\textbf{' + rendered + '}'
         parts.append(rendered)
@@ -122,7 +122,7 @@ def lyx(segments):
         else:
             currency = '\\begin_inset ERT\nstatus collapsed\n\n\\begin_layout Plain Layout\n\\backslash\nrupee~\n\\end_layout\n\n\\end_inset\n'
             escaped = value.replace('\\', '\\backslash\n')
-            parts.append(escaped.replace('₹', currency).replace('Rs.', currency).replace('INR', currency))
+            parts.append(escaped.replace('Rs.', currency).replace('INR', currency))
         if s.get('bold'):
             parts.append('\n\\series default\n')
     return ''.join(parts)

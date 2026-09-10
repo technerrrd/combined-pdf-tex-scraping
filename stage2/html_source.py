@@ -13,20 +13,58 @@ MAX_IMAGE_WIDTH = .52
 MAX_IMAGE_HEIGHT = .30
 # A4 with the primary TeX margins has about 1.54 times as much usable height as width.
 TEXT_HEIGHT_TO_WIDTH = 1.54
+_CONTENT_IMAGE_RE = re.compile(r'_(?:lg|sp)\.(?:jpe?g|png)(?:\?[^\s"\'>]*)?$', re.I)
+_PROMO_TABLE_CLASSES = {
+    'clearalldoubts', 'coursedatatable', 'coursedetialsboxipad', 'nw-dsgn-pp',
+    'explorelgoutrgbox', 'gglsrcprsbox',
+}
+_PROMO_TABLE_RE = re.compile(
+    r'clear all your doubts|join for free|\b\d+\s+videos?\s*\|\s*\d+\s+docs?'
+    r'|explore courses for|edurev notes directly in your google search', re.I)
 
 
 def clean_text(text):
     return text.translate(_PUNCT)
 
 
+def is_content_image(src):
+    return bool(src and _CONTENT_IMAGE_RE.search(src))
+
+
+def fallback_content_root(soup):
+    semantic = soup.find('article') or soup.find('main')
+    if semantic:
+        return semantic
+    candidates = []
+    for div in soup.select('div.contenttextdiv'):
+        heading_count = len(div.find_all(list(_HEADINGS)))
+        block_count = len(div.find_all(['p', 'ul', 'ol']))
+        if heading_count and block_count:
+            candidates.append((heading_count, len(div.get_text(' ', strip=True)), div))
+    if not candidates:
+        return soup.body or soup
+    max_headings = max(count for count, _, _ in candidates)
+    return min((entry for entry in candidates if entry[0] == max_headings),
+               key=lambda entry: entry[1])[2]
+
+
+def is_noise_table(table):
+    for node in (table, *table.parents):
+        classes = ({str(value).lower() for value in node.get('class', [])}
+                   if isinstance(node, Tag) else set())
+        if classes & _PROMO_TABLE_CLASSES:
+            return True
+    return bool(_PROMO_TABLE_RE.search(table.get_text(' ', strip=True)))
+
+
 def find_content_root(soup):
     # Images can precede explr_htmlcnt_dv; do not restrict to that div.
-    images = soup.find_all('img', src=lambda s: s and '_lg.jpg' in s)
-    if not images:
-        return soup.find('article') or soup.find('main') or soup.body or soup
+    images = soup.find_all('img', src=is_content_image)
+    if len(images) < 2:
+        return fallback_content_root(soup)
     current = images[0].parent
     while current and current.name != 'body':
-        if len(current.find_all('img', src=lambda s: s and '_lg.jpg' in s)) == len(images) and current.find(['p', 'h2', 'ul', 'ol']):
+        if len(current.find_all('img', src=is_content_image)) == len(images) and current.find(['p', 'h2', 'ul', 'ol']):
             return current
         current = current.parent
     return soup.body or soup
@@ -65,7 +103,7 @@ def parse_html(html, base_url=''):
 
     def image(node):
         src = node.get('src', '')
-        if '_lg.jpg' not in src: return
+        if not is_content_image(src): return
         url = urljoin(base_url, src)
         if not url.startswith(('http://', 'https://')): raise ValueError(f'Invalid image URL: {url}')
         width = re.search(r'width:\s*([\d.]+)px', node.get('style', ''))
@@ -124,6 +162,8 @@ def parse_html(html, base_url=''):
                 if _segments_text(runs) and not _NOISE_RE.match(_segments_text(runs)): items.append((depth, runs))
             flush(); return
         if name == 'table':
+            if is_noise_table(node):
+                return
             if 'tbl_cntnt' in node.get('class', []) and node.find(string=re.compile(r'^\s*Table of Contents\s*$', re.I)):
                 return
             if node.find('table') or any(cell.get('rowspan', '1') != '1' or cell.get('colspan', '1') != '1' for cell in node.find_all(['td', 'th'])):

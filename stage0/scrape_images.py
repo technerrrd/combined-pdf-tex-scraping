@@ -52,8 +52,11 @@ _UA = ('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
        '(KHTML, like Gecko) Chrome/120.0 Safari/537.36')
 _REQUEST_DELAY = 1.5  # polite delay between page fetches (seconds)
 
-# Content image on the EduRev CDN: ApplicationImages/Temp/<UUID>_lg.jpg
-_CONTENT_IMG_RE = re.compile(r'ApplicationImages/Temp/[a-f0-9-]+_lg\.jpg', re.IGNORECASE)
+# Newer notes use *_lg.jpg; older classes commonly use *_sp.png or *_sp.jpeg.
+_CONTENT_IMG_RE = re.compile(
+    r'ApplicationImages/Temp/[a-f0-9-]+_(?:lg|sp)\.(?:jpe?g|png)',
+    re.IGNORECASE,
+)
 # Chapter number from a label like "- Chapter3" / "- Chapter 4" / "-Chapter9"
 _CHAPTER_NUM_RE = re.compile(r'chapter\s*(\d+)', re.IGNORECASE)
 

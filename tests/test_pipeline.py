@@ -78,6 +78,20 @@ def test_html_order_spacing_tables_and_lists():
     assert els[-1]['rows'][0][0][-1]['kind']=='sub'
 
 
+def test_sparse_legacy_images_use_article_content_and_skip_promotions():
+    html = '''<div class="contenttextdiv"><table><tr><td>Clear all your doubts with EduRev</td></tr></table>
+    <div class="contenttextdiv"><h2>1. Real topic</h2><p>Substantive notes.</p>
+    <img src="https://cn.edurev.in/ApplicationImages/Temp/abc_sp.png"></div></div>'''
+    els = parse_html(html)
+    assert [e['type'] for e in els] == ['heading', 'body', 'image']
+    assert els[-1]['filename'] == 'abc_sp.png'
+
+
+def test_promo_table_is_skipped_before_span_validation():
+    html = '<article><table class="coursedatatable"><tr><td colspan="2">Science for Class 6 91 videos | 431 docs</td></tr></table><h2>Topic</h2><p>Notes.</p></article>'
+    assert [e['type'] for e in parse_html(html)] == ['heading', 'body']
+
+
 @pytest.mark.parametrize('source,expected', [('CO₂','textsubscript{2}'),('x²','textsuperscript{2}'),('α → β',r'\alpha'),(r'\(\frac{a}{b}\)',r'\frac{a}{b}'),(r'\[\sqrt{x}\]',r'\sqrt{x}'),('Price $5 and 50%','\\$5')])
 def test_notation(source,expected):
     runs=inline.text_runs(source)
@@ -194,6 +208,24 @@ def test_docx_fallback_legacy_segments(tmp_path):
     assert r'\raggedbottom' in (tmp_path/'fallback.lyx').read_text()
 
 
+def test_original_chapter_numbers_compact_spacing_and_unicode_rupee(tmp_path):
+    import convert
+    media = tmp_path/'media'; media.mkdir()
+    elements = [dict(type='heading', level='chapter', text='Seven', number=7),
+                dict(type='body', text='₹ 7', segments=[dict(kind='text', text='₹ 7')])]
+    tex_path = tmp_path/'numbered.tex'; lyx_path = tmp_path/'numbered.lyx'
+    convert.write_tex(elements, tex_path, media)
+    convert.write_lyx(elements, lyx_path, media)
+    tex = tex_path.read_text(encoding='utf-8'); lyx = lyx_path.read_text(encoding='utf-8')
+    assert r'\setcounter{chapter}{6}' in tex
+    assert r'\newunicodechar{₹}{\rupee}' in tex
+    assert r'\titlespacing*{\section}{0pt}{1.25ex' in tex
+    assert '\\begin_layout Standard\n\\begin_inset ERT' in lyx
+    assert 'setcounter{chapter}{6}' in lyx
+    assert r'\newunicodechar{₹}{\rupee}' in lyx
+    assert '₹ 7' in tex and '₹ 7' in lyx
+
+
 @pytest.mark.parametrize(('requested','width','height','expected'), [
     (.75, 1200, 400, .52),   # landscape: width cap
     (.60, 600, 600, .462),   # square: height cap
@@ -266,7 +298,7 @@ def test_retry_after_http_date():
 
 def test_legacy_currency_rendering():
     assert inline.tex([('Rs. 250',False)])==r'\rupee~ 250'
-    assert '\\begin_inset ERT' in inline.lyx([('₹250',False)])
+    assert inline.lyx([('₹250',False)]) == '₹250'
 
 def test_two_currency_amounts_are_not_inferred_as_equations():
     runs=inline.text_runs('Prices are $5 and $10.')

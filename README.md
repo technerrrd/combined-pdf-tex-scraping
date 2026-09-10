@@ -33,7 +33,9 @@ sudo apt-get install lyx texlive-latex-extra texlive-fonts-extra texlive-science
 ```
 
 Preflight reports missing dependencies before fetching. Currency uses `tfrupee`
-(which provides `\rupee`), replacing the unavailable `rupee.sty` dependency.
+(which provides `\rupee`) and `newunicodechar`, so literal rupee symbols remain
+editable while textual `Rs.` and `INR` forms are normalized. This replaces the
+unavailable `rupee.sty` dependency.
 
 ## Build a module
 
@@ -103,7 +105,13 @@ Review and remove old diagnostics/snapshots manually when no longer needed.
 Generated pages use natural bottom spacing. Content diagrams preserve their
 aspect ratio and source order, retain smaller source-requested sizes, and are
 limited to a balanced box of about 52% text width and 30% usable page height.
-Cover and chapter-heading artwork remains controlled by the templates.
+Current and legacy EduRev content-image suffixes (`_lg` and `_sp`, JPEG or PNG)
+are accepted. Promotional course tables and calls to join EduRev are excluded;
+substantive chapter tables remain content. Cover and chapter-heading artwork
+remains controlled by the templates.
+
+Chapter and section numbering follows the chapter numbers supplied in the links
+file, including gaps. Chapter-banner filenames use the same source numbers.
 
 Publication uses an exclusive lock. If interrupted during publication, inspect
 `.<module>.publish.lock`, the staging directory, and the previous snapshot before

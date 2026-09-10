@@ -202,7 +202,7 @@ def build(args):
                         except (BuildError, ValueError, OSError) as exc:
                             report['errors'].append(f"Chapter {ch['num']} image {el['url']}: {exc}")
                     ch['elements'] = elements
-                    combined.append(dict(type='heading', level='chapter', text=ch['name']))
+                    combined.append(dict(type='heading', level='chapter', text=ch['name'], number=ch['num']))
                     combined.extend(elements)
                 except (BuildError, ValueError, OSError) as exc:
                     report['errors'].append(f"Chapter {ch['num']} {ch['url']}: {exc}")
@@ -216,7 +216,7 @@ def build(args):
         tex_path.write_text(source, encoding='utf-8')
         lyx_path = staging / (module + '.lyx')
         source = lyx_path.read_text(encoding='utf-8')
-        source = source.replace('\\end_preamble', '\\usepackage{amsmath}\n\\usepackage{tfrupee}\n\\end_preamble', 1)
+        source = source.replace('\\end_preamble', '\\usepackage{amsmath}\n\\end_preamble', 1)
         # Preserve the cover design while replacing its sample module and class.
         source = source.replace('centering Maths Module I', 'centering ' + inline.escape(args.title or module).replace('\\', '\\backslash\n'))
         source = source.replace('Large Class 7', 'Large \\backslash\nstrut ')

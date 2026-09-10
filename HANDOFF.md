@@ -2,10 +2,10 @@
 
 ## Current objective and branch
 
-- Implemented reliable note generation, balanced layouts, and headless Linux support; added the user-provided Class 6th-8th reference set.
+- Preserve source chapter numbering, compact Science layouts, literal rupee symbols, and exclude EduRev promotional page furniture for Class 6th-8th generation.
 - Branch: dev, tracking origin/dev.
 - Working in the Git clone; the downloaded source folder remains unchanged.
-- User authorized pushing the balanced-layout changes to origin/dev. Earlier reliability changes were pushed on 2026-09-08.
+- User authorized pushing these generator and template fixes to origin/dev on 2026-09-10.
 
 ## Completed work and decisions
 
@@ -27,6 +27,10 @@
 - Headless Linux runs now select Qt's offscreen backend automatically unless a display or explicit Qt platform is already configured.
 - Added `setup-linux.sh` for Ubuntu/Debian, Linux command documentation, and sparse CI checkouts that omit the large reference set from routine jobs.
 - Added 20 validated reference PDFs under the three root-level Class Science folders and the original `Science-notes-links.xlsx` workbook; `.gitattributes` marks PDFs/workbooks as binary.
+- Chapter headings now carry their source numbers into TeX/LyX counter resets, section numbering, and themed banner filenames; sequential numbering remains the fallback for unnumbered inputs.
+- Tightened section, subsection, and subsubsection spacing in both output paths and retained `\raggedbottom`.
+- Added `newunicodechar` rupee handling alongside `tfrupee`, preserving literal `₹` while continuing to normalize `Rs.` and `INR`.
+- Added legacy `_sp` JPEG/PNG content-image discovery, sparse-page content-root selection, and filtering for EduRev promotional/course tables without suppressing substantive tables.
 
 ## Tests and results
 
@@ -47,6 +51,8 @@
 - Windows Python 3.12 after Linux optimization: 55 regular tests passed and the real TeX/LyX compiler integration passed in 64.73 seconds.
 - All 20 tracked reference PDFs opened successfully (360 pages total); the workbook ZIP is valid and contains 7 Class 8, 7 Class 7, and 6 Class 6 links.
 - The first post-push Linux compiler job reached pytest but failed because sparse checkout omitted the relative `tmp/` parent used by `--basetemp`; the workflow now uses the runner's absolute temporary directory. GitHub actions were also updated to their Node 24 major versions.
+- Windows Python 3.12 on 2026-09-10: 58 regular tests passed; one integration-marked test was deselected.
+- Windows LyX 2.4 / TeX Live 2025 on 2026-09-10: the real compiler integration passed in 67.69 seconds. An initial invocation failed before collection because its temporary parent directory did not exist; rerunning with a valid workspace path passed.
 
 ## Known limits and next steps
 

@@ -54,8 +54,11 @@
 
 %----------------------------------------------------------------------------------------
 
-\input{structure} % Insert the commands.tex file which contains the majority of the structure behind the template
+\usepackage{tfrupee}
+\usepackage{newunicodechar}
+\newunicodechar{₹}{\rupee}
 \raggedbottom
+\input{structure} % Insert the commands.tex file which contains the majority of the structure behind the template
 \end_preamble
 \use_default_options false
 \maintain_unincluded_children no

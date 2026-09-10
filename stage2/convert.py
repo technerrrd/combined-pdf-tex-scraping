@@ -110,7 +110,7 @@ def strip_heading_numbering(text: str) -> str:
 # LaTeX helpers
 # ---------------------------------------------------------------------------
 def tex_escape(text: str) -> str:
-    return inline.escape(text).replace('₹', r'\rupee~').replace('Rs.', r'\rupee~').replace('INR', r'\rupee~')
+    return inline.escape(text).replace('Rs.', r'\rupee~').replace('INR', r'\rupee~')
 
 
 def render_tex_segments(segments) -> str:
@@ -320,10 +320,16 @@ TEX_PREAMBLE = r"""\documentclass[12pt,a4paper]{book}
 \usepackage{amsmath}
 \usepackage{enumitem}
 \usepackage{tfrupee}
+\usepackage{newunicodechar}
+\newunicodechar{₹}{\rupee}
+\usepackage{titlesec}
 \usepackage{geometry}
 \geometry{margin=2.5cm}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{4pt}
+\titlespacing*{\section}{0pt}{1.25ex plus .25ex minus .1ex}{.25ex plus .1ex}
+\titlespacing*{\subsection}{0pt}{1ex plus .2ex minus .1ex}{.2ex plus .1ex}
+\titlespacing*{\subsubsection}{0pt}{.75ex plus .15ex minus .1ex}{.1ex plus .05ex}
 \raggedbottom
 
 \begin{document}
@@ -360,6 +366,9 @@ def write_tex(elements, out_path: Path, media_dir: Path):
             txt = render_tex_segments(el.get('segments', [(el['text'], False)]))
             cmd = {'chapter': 'chapter', 'section': 'section',
                    'subsection': 'subsection', 'subsubsection': 'subsubsection'}.get(lvl, 'subsection')
+            chapter_number = el.get('number')
+            if lvl == 'chapter' and isinstance(chapter_number, int) and chapter_number > 0:
+                lines.append(f'\\setcounter{{chapter}}{{{chapter_number - 1}}}\n')
             lines.append(f'\\{cmd}{{{txt}}}\n')
 
         elif t == 'body':
@@ -432,6 +441,9 @@ LYX_HEADER = """\
 \\origin unavailable
 \\textclass book
 \\begin_preamble
+\\usepackage{tfrupee}
+\\usepackage{newunicodechar}
+\\newunicodechar{₹}{\\rupee}
 \\raggedbottom
 \\end_preamble
 \\use_default_options true
@@ -966,9 +978,20 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
             layout = {'chapter': 'Chapter', 'section': 'Section',
                       'subsection': 'Subsection',
                       'subsubsection': 'Subsubsection'}.get(lvl, 'Section')
-            if lvl == 'chapter' and template_dir is not None:
+            chapter_number = el.get('number')
+            has_original_number = isinstance(chapter_number, int) and chapter_number > 0
+            if lvl == 'chapter':
                 chapter_idx += 1
-                img_name = f'chapterhead_Ch{chapter_idx}.png'
+                if has_original_number:
+                    lines.append('\\begin_layout Standard\n')
+                    lines.append(ert(
+                        '\\backslash\n'
+                        f'setcounter{{chapter}}{{{chapter_number - 1}}}'
+                    ))
+                    lines.append('\\end_layout\n\n')
+            if lvl == 'chapter' and template_dir is not None:
+                banner_number = chapter_number if has_original_number else chapter_idx
+                img_name = f'chapterhead_Ch{banner_number}.png'
                 generate_chapter_image(el['text'], out_path.parent / img_name)
                 lines.append(chapterimage_block(img_name))
             lines.append(f'\\begin_layout {layout}\n')
