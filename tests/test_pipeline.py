@@ -87,6 +87,23 @@ def test_sparse_legacy_images_use_article_content_and_skip_promotions():
     assert els[-1]['filename'] == 'abc_sp.png'
 
 
+def test_number_prefixed_content_images_are_kept_but_decorations_are_skipped():
+    html = '''<article><h2>Topic</h2><p>Substantive notes.</p>
+    <img alt="Thermometer" src="https://cn.edurev.in/ApplicationImages/Temp/1421561_75514512-4eb3-45e9-9b2b-656447055db2_lg.png">
+    <img alt="Decoration" src="https://cn.edurev.in/cdn_lib/Vector.png"></article>'''
+    images = [element for element in parse_html(html) if element['type'] == 'image']
+    assert len(images) == 1
+    assert images[0]['filename'].startswith('1421561_')
+
+
+def test_instructional_gif_is_accepted_for_static_frame_conversion():
+    html = '''<article><h2>Nutrition</h2><p>Substantive notes.</p>
+    <img alt="Nutrition" src="https://cn.edurev.in/ApplicationImages/Temp/27602a0a-ab1d-4a9b-8222-62c0e350892f_lg.gif"></article>'''
+    images = [element for element in parse_html(html) if element['type'] == 'image']
+    assert len(images) == 1
+    assert images[0]['filename'].endswith('_lg.gif')
+
+
 def test_promo_table_is_skipped_before_span_validation():
     html = '<article><table class="coursedatatable"><tr><td colspan="2">Science for Class 6 91 videos | 431 docs</td></tr></table><h2>Topic</h2><p>Notes.</p></article>'
     assert [e['type'] for e in parse_html(html)] == ['heading', 'body']
@@ -227,11 +244,11 @@ def test_original_chapter_numbers_compact_spacing_and_unicode_rupee(tmp_path):
 
 
 @pytest.mark.parametrize(('requested','width','height','expected'), [
-    (.75, 1200, 400, .52),   # landscape: width cap
-    (.60, 600, 600, .462),   # square: height cap
-    (.60, 300, 600, .231),   # portrait: height cap
-    (.60, 150, 900, .077),   # extremely tall: height cap
-    (.25, 1200, 400, .25),   # retain a smaller source-requested size
+    (.75, 1200, 400, .39),   # landscape: width cap, then 25% reduction
+    (.60, 600, 600, .346),   # square: height cap, then 25% reduction
+    (.60, 300, 600, .173),   # portrait: height cap, then 25% reduction
+    (.60, 150, 900, .058),   # extremely tall: height cap, then 25% reduction
+    (.25, 1200, 400, .188),  # smaller source-requested size is also reduced
 ])
 def test_balanced_image_scale(requested, width, height, expected):
     assert fit_image_scale(requested, width, height) == expected
@@ -322,6 +339,21 @@ def test_edurev_navigation_table_is_skipped_before_span_validation():
 def test_notes_exclude_embedded_quiz_widgets():
     elements=parse_html('<article><p>Real notes.</p><div id="content_questions"><p>Question and solution widget</p></div><p>More notes.</p></article>')
     assert [e['text'] for e in elements]==['Real notes.','More notes.']
+
+
+def test_notes_exclude_optional_fact_callouts_and_all_quiz_variants():
+    html = '''<article>
+      <p>Real notes before.</p>
+      <blockquote><p><strong>Fun fact!</strong></p><p>Optional thermometer fact.</p></blockquote>
+      <div class="question_block_42"><p>Try yourself: A question?</p><p>Option A</p></div>
+      <blockquote><strong>Do you know?</strong><p>Optional seed fact.</p></blockquote>
+      <p>The teacher asked, "Do you know the answer?" This is ordinary prose.</p>
+    </article>'''
+    elements = parse_html(html)
+    assert [e['text'] for e in elements] == [
+        'Real notes before.',
+        'The teacher asked, "Do you know the answer?" This is ordinary prose.',
+    ]
 
 
 def test_typographic_dashes_match_tex_punctuation():

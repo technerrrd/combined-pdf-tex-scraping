@@ -11,9 +11,10 @@ _HEADING_NUM_RE = re.compile(r'^(?:Q\d+\.?\s+|\d+(?:\.\d+)*\.?\s+|\([a-zA-Z0-9]+
 _PUNCT = str.maketrans({'\u00ad': '', '\u200b': '', '\u200c': '', '\u200d': '', '\ufeff': '', '‘': "'", '’': "'", '“': '"', '”': '"', '–': '--', '—': '---', '…': '...'})
 MAX_IMAGE_WIDTH = .52
 MAX_IMAGE_HEIGHT = .30
+IMAGE_SCALE_FACTOR = .75
 # A4 with the primary TeX margins has about 1.54 times as much usable height as width.
 TEXT_HEIGHT_TO_WIDTH = 1.54
-_CONTENT_IMAGE_RE = re.compile(r'_(?:lg|sp)\.(?:jpe?g|png)(?:\?[^\s"\'>]*)?$', re.I)
+_CONTENT_IMAGE_RE = re.compile(r'_(?:lg|sp)\.(?:jpe?g|png|gif)(?:\?[^\s"\'>]*)?$', re.I)
 _PROMO_TABLE_CLASSES = {
     'clearalldoubts', 'coursedatatable', 'coursedetialsboxipad', 'nw-dsgn-pp',
     'explorelgoutrgbox', 'gglsrcprsbox',
@@ -21,6 +22,7 @@ _PROMO_TABLE_CLASSES = {
 _PROMO_TABLE_RE = re.compile(
     r'clear all your doubts|join for free|\b\d+\s+videos?\s*\|\s*\d+\s+docs?'
     r'|explore courses for|edurev notes directly in your google search', re.I)
+_EXTRA_CALLOUT_RE = re.compile(r'^(?:fun fact!?|do you know\??|did you know\??)\b', re.I)
 
 
 def clean_text(text):
@@ -57,6 +59,23 @@ def is_noise_table(table):
     return bool(_PROMO_TABLE_RE.search(table.get_text(' ', strip=True)))
 
 
+def is_extra_material(node):
+    """Identify optional callouts and embedded quiz widgets, not chapter prose."""
+    for current in (node, *node.parents):
+        if not isinstance(current, Tag):
+            continue
+        classes = {str(value).lower() for value in current.get('class', [])}
+        if (current.get('id') == 'content_questions'
+                or 'nq2_card' in classes
+                or any(value.startswith('question_block_') for value in classes)):
+            return True
+        if current.name == 'blockquote':
+            text = clean_text(current.get_text(' ', strip=True))
+            if _EXTRA_CALLOUT_RE.match(text):
+                return True
+    return False
+
+
 def find_content_root(soup):
     # Images can precede explr_htmlcnt_dv; do not restrict to that div.
     images = soup.find_all('img', src=is_content_image)
@@ -90,7 +109,8 @@ def fit_image_scale(requested, width, height):
     if width <= 0 or height <= 0:
         raise ValueError('Decoded image dimensions must be positive')
     height_limited_width = MAX_IMAGE_HEIGHT * TEXT_HEIGHT_TO_WIDTH * (width / height)
-    return round(min(requested, MAX_IMAGE_WIDTH, height_limited_width), 3)
+    fitted = min(requested, MAX_IMAGE_WIDTH, height_limited_width)
+    return round(fitted * IMAGE_SCALE_FACTOR, 3)
 
 
 def parse_html(html, base_url=''):
@@ -131,8 +151,8 @@ def parse_html(html, base_url=''):
     def walk(node, depth=0):
         name = getattr(node, 'name', None)
         if name is None: return
+        if is_extra_material(node): return
         if name in ('nav', 'footer', 'header', 'style'): return
-        if node.get('id') == 'content_questions' or 'nq2_card' in node.get('class', []): return
         if name == 'img': image(node); return
         if name in _HEADINGS:
             runs = _segments(node)
