@@ -9,6 +9,7 @@
 - The root-level `Class 6th Science/`, `Class 7th Science/`, `Class 8th Science/`, and `Science-notes-links.xlsx` are intentional tracked Linux test references; do not treat them as generated output.
 - Commit and push only when authorized by the user; standing authorization for automatic pushes has not been established.
 - Before pushing, verify the remote and review the diff and relevant validation results. Never force-push without explicit authorization.
+- Before token-intensive, page-by-page visual inspection of generated PDFs, ask the user whether to run it for that release and default to skipping it when declined. This opt-in does not weaken mandatory compilation, structural validation, or file-integrity checks.
 - Never include credentials or secrets in project files or handoff notes. Use existing Git authentication or interactive sign-in.
 
 ## Pipeline
