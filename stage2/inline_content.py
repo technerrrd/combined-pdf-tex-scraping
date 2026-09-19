@@ -8,6 +8,7 @@ SYMBOLS.update(dict(zip('→←↔⇌⟶×÷±≈≤≥≠∞∴°·',
     ['\\'+s for s in 'to leftarrow leftrightarrow rightleftharpoons longrightarrow times div pm approx leq geq neq infty therefore circ cdot'.split()])))
 COMMANDS = set('frac dfrac tfrac sqrt text mathrm mathbf mathit mathcal mathbb operatorname left right overline underline hat widehat bar vec dot ddot tilde widetilde sin cos tan log ln exp lim sum prod int iint partial nabla cdots ldots vdots ddots quad qquad space begin end cases matrix pmatrix bmatrix vmatrix aligned array displaystyle textstyle limits nonumber'.split()) | {v[1:] for v in SYMBOLS.values()}
 COMMANDS |= set('epsilon varepsilon vartheta varphi varrho varsigma omega degree angle perp parallel cup cap subset subseteq in notin forall exists emptyset lbrace rbrace langle rangle vert Vert'.split())
+COMMANDS |= set('rightarrow longleftarrow longleftrightarrow Rightarrow Leftarrow Leftrightarrow'.split())
 ENVIRONMENTS = {'matrix', 'pmatrix', 'bmatrix', 'vmatrix', 'cases', 'aligned'}
 
 

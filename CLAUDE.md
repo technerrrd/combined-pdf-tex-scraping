@@ -1,4 +1,4 @@
-# CLAUDE.md <!-- version: v4.3 -->
+# CLAUDE.md <!-- version: v4.4 -->
 
 ## Maintenance Rule
 
@@ -39,8 +39,12 @@ required checks pass. Failed runs retain diagnostics and preserve existing outpu
 - The primary path no longer flattens scientific notation to ASCII. Image formulas
   remain images. No equations are inferred from prose or transcribed from images.
 - Generated pages use natural bottom spacing. Content images retain smaller
-  source-requested sizes and are capped at about 52% text width and 30% usable
-  page height without cropping, distortion, or source-order changes.
+  source-requested sizes, fit within 52% text width and 30% usable page height,
+  then use a configurable multiplier of 0.75 by default (effective maximums
+  about 39% and 22.5%) without cropping, distortion, or source-order changes.
+- The all-class release command reads the workbook and atomically publishes
+  Class 6-8 outside the checkout, defaulting on Windows to
+  `D:\Science-Book-Releases`, with Git provenance and compiler diagnostics.
 - Headless Linux compiler runs automatically use the offscreen Qt backend unless
   the caller supplied a display or Qt platform. `setup-linux.sh` provisions the
   supported Ubuntu/Debian environment.

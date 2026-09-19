@@ -104,13 +104,40 @@ def pick_scale(width):
     return min([.25, .4, .5, .6, .75], key=lambda s: abs(s - width / 700)) if width else .6
 
 
-def fit_image_scale(requested, width, height):
+def fit_image_scale(requested, width, height, scale_factor=IMAGE_SCALE_FACTOR):
     """Fit an image within the balanced page box without enlarging or distorting it."""
     if width <= 0 or height <= 0:
         raise ValueError('Decoded image dimensions must be positive')
+    if not 0 < scale_factor <= 1:
+        raise ValueError('Image scale factor must be in (0,1]')
     height_limited_width = MAX_IMAGE_HEIGHT * TEXT_HEIGHT_TO_WIDTH * (width / height)
     fitted = min(requested, MAX_IMAGE_WIDTH, height_limited_width)
-    return round(fitted * IMAGE_SCALE_FACTOR, 3)
+    return round(fitted * scale_factor, 3)
+
+
+def repair_split_math_delimiters(root):
+    """Join a closing math delimiter split across adjacent HTML text nodes."""
+    strings = [node for node in root.find_all(string=True)
+               if not node.find_parent(['script', 'style'])]
+    for index, node in enumerate(strings[:-1]):
+        value = str(node)
+        if not value.endswith('\\'):
+            continue
+        opener = r'\(' if value.rfind(r'\(') > value.rfind(r'\)') else (
+            r'\[' if value.rfind(r'\[') > value.rfind(r'\]') else None)
+        if not opener:
+            continue
+        closing = ')' if opener == r'\(' else ']'
+        for following in strings[index + 1:]:
+            following_value = str(following)
+            if not following_value.strip():
+                continue
+            match = re.match(r'(\s*)' + re.escape(closing), following_value)
+            if not match:
+                break
+            node.replace_with(value + closing)
+            following.replace_with(following_value[:match.start()] + following_value[match.end():])
+            break
 
 
 def parse_html(html, base_url=''):
@@ -119,6 +146,7 @@ def parse_html(html, base_url=''):
     if re.search(r'access denied|just a moment|sign in|log in|captcha|not found|forbidden', title, re.I) or soup.find('input', attrs={'type': 'password'}):
         raise ValueError('Blocked, login or error page; chapter content unavailable')
     root = find_content_root(soup)
+    repair_split_math_delimiters(root)
     elements = []
 
     def image(node):

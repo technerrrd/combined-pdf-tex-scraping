@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import tempfile
 from urllib.parse import urlparse
@@ -28,6 +29,8 @@ def arguments(argv=None):
     parser.add_argument('--pdf', type=Path)
     parser.add_argument('--chapter-map', type=Path)
     parser.add_argument('--coverage-threshold', type=float, default=.95)
+    parser.add_argument('--image-scale', type=float, default=.75,
+                        help='Multiplier applied after page-fit sizing; range (0,1], default 0.75')
     return parser.parse_args(argv)
 
 
@@ -57,6 +60,20 @@ def module_name(args):
     return name
 
 
+def source_revision():
+    """Return reproducible Git provenance without making Git a build dependency."""
+    try:
+        commit = subprocess.run(
+            ['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], capture_output=True,
+            text=True, timeout=10, check=True).stdout.strip()
+        dirty = bool(subprocess.run(
+            ['git', '-C', str(ROOT), 'status', '--porcelain'], capture_output=True,
+            text=True, timeout=10, check=True).stdout.strip())
+        return {'git_commit': commit, 'git_dirty': dirty}
+    except (OSError, subprocess.SubprocessError):
+        return {'git_commit': None, 'git_dirty': None}
+
+
 def rendered_text(doc, page_range, furniture):
     """Return PDF text with page numbers and repeated document headings removed."""
     from validate_against_pdf import norm
@@ -73,7 +90,7 @@ def rendered_text(doc, page_range, furniture):
                 if not normalized or re.fullmatch(r'\d+(?:\.\d+)*', stripped):
                     continue
                 running_heading = (re.match(r'^\d*\s*chapter\s+\d+\.\s+', stripped, re.I) or
-                                   re.match(r'^\d+(?:\.\d+)+\s+\S', stripped))
+                                   re.match(r'^\d+(?:\.\d+)+\.?\s+\S', stripped))
                 if in_margin and (running_heading or normalized in furniture_keys):
                     continue
                 lines.append(stripped)
@@ -115,7 +132,22 @@ def check_structure(chapters, directory, module, outputs):
             if kind == 'table': segments.extend(c for r in e['rows'] for c in r if isinstance(c, list))
             for runs in segments:
                 if kind != 'heading':
-                    prose[ch['num']].extend(s['text'] for s in inline.adapt(runs) if s['kind'] == 'text' and len(norm(s['text'])) >= 3)
+                    # Validate the complete prose of each paragraph/list cell. Math
+                    # has dedicated source checks because PDF extraction is unstable.
+                    # Checking each
+                    # inline run separately creates false gaps when punctuation sits
+                    # at a bold/plain boundary (for example ``precipitation`` + ``-rain``).
+                    adapted = inline.adapt(runs)
+                    prose_only = ''.join(segment['text'] for segment in adapted
+                                         if segment['kind'] != 'math')
+                    if len(norm(prose_only)) >= 3:
+                        # Retain inline operators/units in mixed prose, but leave
+                        # formula-only blocks to the dedicated equation checks.
+                        # Spaces keep a TeX command at a run boundary from absorbing
+                        # the following prose letter (``\\circ`` + ``C``).
+                        prose[ch['num']].append(''.join(
+                            f" {segment['text']} " if segment['kind'] == 'math' else segment['text']
+                            for segment in adapted))
                 rendered = inline.tex(runs)
                 if rendered and rendered not in tex: raise ValidationError('Generated TeX lost source content')
                 for s in inline.adapt(runs):
@@ -162,6 +194,7 @@ def build(args):
     from scrape_images import parse_links
     module = module_name(args)
     if not 0 < args.coverage_threshold <= 1: raise ValueError('Coverage threshold must be in (0,1]')
+    if not 0 < args.image_scale <= 1: raise ValueError('--image-scale must be in (0,1]')
     if args.chapter_map and not args.pdf: raise ValueError('--chapter-map requires --pdf')
     if args.pdf and not args.pdf.is_file(): raise ValueError('Reference PDF does not exist')
     if not args.links.is_file(): raise ValueError('Chapter links file does not exist')
@@ -194,7 +227,8 @@ def build(args):
                             from PIL import Image
                             with Image.open(io.BytesIO(image)) as im:
                                 extension = '.png' if im.format == 'PNG' else '.jpg'
-                                el['scale'] = html_source.fit_image_scale(el['scale'], im.width, im.height)
+                                el['scale'] = html_source.fit_image_scale(
+                                    el['scale'], im.width, im.height, args.image_scale)
                                 encoded = io.BytesIO()
                                 im.convert('RGB').save(encoded, format='PNG' if extension == '.png' else 'JPEG')
                             el['filename'] = hashlib.sha256(el['url'].encode()).hexdigest() + extension
@@ -221,14 +255,18 @@ def build(args):
         source = source.replace('centering Maths Module I', 'centering ' + inline.escape(args.title or module).replace('\\', '\\backslash\n'))
         source = source.replace('Large Class 7', 'Large \\backslash\nstrut ')
         lyx_path.write_text(source, encoding='utf-8')
-        outputs = compile_documents(staging, module, programs)
+        report['compiler_diagnostics'] = []
+        outputs = compile_documents(staging, module, programs, report['compiler_diagnostics'])
         report['structure'] = check_structure(chapters, staging, module, outputs)
         if args.pdf:
             report['reference_status'] = 'failed'
             report['coverage'] = validate_reference(args.pdf, chapters, outputs, args.coverage_threshold, mapping)
             if any(r['coverage'] < args.coverage_threshold for r in report['coverage']): raise ValidationError('Reference coverage below threshold')
             report['reference_status'] = 'passed'
-        manifest = dict(module=module, title=args.title or module, chapters=chapters, pdfs={k: p.name for k,p in outputs.items()})
+        manifest = dict(
+            module=module, title=args.title or module, chapters=chapters,
+            image_scale=args.image_scale, source=source_revision(),
+            pdfs={k: p.name for k,p in outputs.items()})
         atomic_write(staging / 'manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2).encode('utf-8'))
         report['status'] = 'passed'; write_report(staging, report)
         publish(staging, output_root / module)

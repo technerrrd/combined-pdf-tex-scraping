@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -120,8 +121,8 @@ def compiler_environment(environ=None, platform_name=None):
     return environment
 
 
-def command(args, directory, log, timeout=180):
-    environment = compiler_environment()
+def command(args, directory, log, timeout=180, environment=None):
+    environment = compiler_environment() if environment is None else environment
     try:
         result = subprocess.run(args, cwd=directory, env=environment, capture_output=True, timeout=timeout)
         atomic_write(log, result.stdout + result.stderr)
@@ -139,32 +140,77 @@ def pdf_check(path):
         if not len(doc): raise BuildError(f'Empty PDF: {path.name}')
 
 
-def compile_documents(directory, module, programs):
+def latex_diagnostics(log, label):
+    """Return actionable layout diagnostics without reporting harmless TeX chatter."""
+    diagnostics = []
+    for line in log.splitlines():
+        stripped = line.strip()
+        if re.search(r'Float too large for page', stripped, re.I):
+            diagnostics.append({'document': label, 'severity': 'error', 'kind': 'oversized_float', 'message': stripped})
+        elif re.search(r'Missing character:', stripped, re.I):
+            diagnostics.append({'document': label, 'severity': 'error', 'kind': 'missing_glyph', 'message': stripped})
+        else:
+            match = re.search(r'Overfull \\hbox \(([0-9.]+)pt too wide\)', stripped, re.I)
+            if match and float(match.group(1)) >= 10:
+                diagnostics.append({'document': label, 'severity': 'warning', 'kind': 'overfull_hbox',
+                                    'amount_pt': float(match.group(1)), 'message': stripped})
+    # Repeated compiler passes can repeat the same warning.
+    return list({json.dumps(item, sort_keys=True): item for item in diagnostics}.values())
+
+
+def compiler_python_environment(directory, environ=None, platform_name=None, python_executable=None):
+    """Give LyX a deterministic Python command, including a Windows ``py`` shim."""
+    current_platform = os.name if platform_name is None else platform_name
+    environment = compiler_environment(environ, current_platform)
+    executable_path = str(Path(python_executable or sys.executable).resolve())
+    environment['PYTHON'] = executable_path
+    shim = None
+    if current_platform == 'nt':
+        shim = Path(directory) / '.compiler-bin'
+        shim.mkdir(parents=True, exist_ok=True)
+        atomic_write(shim / 'py.cmd', f'@"{executable_path}" %*\r\n'.encode('utf-8'))
+        environment['PATH'] = str(shim) + os.pathsep + environment.get('PATH', '')
+    return environment, shim
+
+
+def compile_documents(directory, module, programs, diagnostics=None):
     directory = Path(directory)
     outputs = {}
-    # Export LyX to its own TeX file, then compile with the same bounded pipeline.
-    # This preserves both sources and gives full control over passes/log checks.
-    exported = module + '-lyx.tex'
-    command([programs['lyx'], '-batch', '-E', 'pdflatex', exported, module + '.lyx'], directory, directory / 'lyx-export.log')
-    if not (directory / exported).exists(): raise BuildError('LyX did not export TeX')
-    # LyX sometimes emits absolute PNG paths; keep only paths within this build portable.
-    export_path = directory / exported
-    export_text = export_path.read_text(encoding='utf-8')
-    export_text = export_text.replace('{' + directory.resolve().as_posix() + '/', '{')
-    export_path.write_text(export_text, encoding='utf-8')
-    for source, label in ((module + '.tex', 'tex'), (exported, 'lyx')):
-        job = module + '-' + label
-        for iteration in range(1, 5):
-            command([programs['pdflatex'], '-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', '-file-line-error', '-jobname=' + job, source], directory, directory / f'{label}-pass-{iteration}.log')
-            log_path = directory / (job + '.log')
-            log = log_path.read_text(errors='replace') if log_path.exists() else ''
-            unresolved = re.search(r'undefined references|Citation .+ undefined|Reference .+ undefined|Rerun to get|Label\(s\) may have changed|rerunfilecheck Warning', log, re.I)
-            if iteration >= 2 and not unresolved: break
-        else: raise BuildError(f'{label}: unresolved references after four passes')
-        if re.search(r'LaTeX Error|not found|Missing character:', log, re.I):
-            raise BuildError(f'{label}: missing asset, glyph or LaTeX error; see {job}.log')
-        pdf = directory / (job + '.pdf'); pdf_check(pdf); outputs[label] = pdf
-    return outputs
+    diagnostics = [] if diagnostics is None else diagnostics
+    environment, shim = compiler_python_environment(directory)
+    try:
+        # Export LyX to its own TeX file, then compile with the same bounded pipeline.
+        # This preserves both sources and gives full control over passes/log checks.
+        exported = module + '-lyx.tex'
+        command([programs['lyx'], '-batch', '-E', 'pdflatex', exported, module + '.lyx'], directory,
+                directory / 'lyx-export.log', environment=environment)
+        if not (directory / exported).exists(): raise BuildError('LyX did not export TeX')
+        # LyX sometimes emits absolute PNG paths; keep only paths within this build portable.
+        export_path = directory / exported
+        export_text = export_path.read_text(encoding='utf-8')
+        export_text = export_text.replace('{' + directory.resolve().as_posix() + '/', '{')
+        export_path.write_text(export_text, encoding='utf-8')
+        for source, label in ((module + '.tex', 'tex'), (exported, 'lyx')):
+            job = module + '-' + label
+            for iteration in range(1, 5):
+                command([programs['pdflatex'], '-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error',
+                         '-file-line-error', '-jobname=' + job, source], directory,
+                        directory / f'{label}-pass-{iteration}.log', environment=environment)
+                log_path = directory / (job + '.log')
+                log = log_path.read_text(errors='replace') if log_path.exists() else ''
+                unresolved = re.search(r'undefined references|Citation .+ undefined|Reference .+ undefined|Rerun to get|Label\(s\) may have changed|rerunfilecheck Warning', log, re.I)
+                if iteration >= 2 and not unresolved: break
+            else: raise BuildError(f'{label}: unresolved references after four passes')
+            found = latex_diagnostics(log, label)
+            diagnostics.extend(found)
+            if any(item['severity'] == 'error' for item in found):
+                raise ValidationError(f'{label}: unsafe layout warning; see {job}.log')
+            if re.search(r'LaTeX Error|not found', log, re.I):
+                raise BuildError(f'{label}: missing asset or LaTeX error; see {job}.log')
+            pdf = directory / (job + '.pdf'); pdf_check(pdf); outputs[label] = pdf
+        return outputs
+    finally:
+        if shim and shim.exists(): shutil.rmtree(shim)
 
 
 def publish(staging, destination):
@@ -195,6 +241,8 @@ def write_report(directory, report):
     atomic_write(Path(directory) / 'report.json', json.dumps(report, indent=2, ensure_ascii=False).encode('utf-8'))
     lines = [f"Status: {report['status']}", 'Reference coverage: ' + report.get('reference_status', 'not checked')]
     lines.extend(report.get('errors', []))
+    for item in report.get('compiler_diagnostics', []):
+        lines.append(f"{item['severity'].upper()} [{item['document']}/{item['kind']}]: {item['message']}")
     for row in report.get('coverage', []):
         lines.append(f"Chapter {row['chapter']} / {row['target']}: {row['present']}/{row['total']} ({row['coverage']:.1%})")
         lines.extend('  Missing: ' + text for text in row['unmatched'])

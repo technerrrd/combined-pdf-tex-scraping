@@ -71,6 +71,7 @@ Linux uses the same arguments:
 | `--pdf PATH` | Explicit reference PDF. No automatic PDF selection. |
 | `--chapter-map PATH` | Explicit reference chapter page ranges when mapping is ambiguous; requires `--pdf`. |
 | `--coverage-threshold 0.95` | Required coverage per chapter for parsed content and each compiled PDF; range `(0, 1]`. |
+| `--image-scale 0.75` | Multiplier applied after balanced page-fit sizing; range `(0, 1]`. |
 
 Relative command-line paths resolve from the current directory. Defaults resolve
 from the repository. Both compilers are mandatory, including offline builds.
@@ -102,9 +103,16 @@ presented as completed modules. Previous successful output is unchanged.
 Successful replacements retain the old module as `<module>.previous-<timestamp>`.
 Review and remove old diagnostics/snapshots manually when no longer needed.
 
+Compiler reports include overfull boxes of at least 10pt. Missing glyphs and
+oversized floats fail publication; significant overfull boxes are reported as
+warnings. On Windows the compiler environment supplies LyX with a temporary
+`py` launcher that points to the Python executable running the pipeline.
+
 Generated pages use natural bottom spacing. Content diagrams preserve their
-aspect ratio and source order, retain smaller source-requested sizes, and are
-limited to a balanced box of about 52% text width and 30% usable page height.
+aspect ratio and source order, retain smaller source-requested sizes, and first
+fit a balanced box of 52% text width and 30% usable page height. The default
+`--image-scale 0.75` then reduces that fitted size to effective maximums of about
+39% text width and 22.5% usable page height.
 Current and legacy EduRev content-image suffixes (`_lg` and `_sp`, JPEG or PNG)
 are accepted. Promotional course tables and calls to join EduRev are excluded;
 substantive chapter tables remain content. Cover and chapter-heading artwork
@@ -112,6 +120,28 @@ remains controlled by the templates.
 
 Chapter and section numbering follows the chapter numbers supplied in the links
 file, including gaps. Chapter-banner filenames use the same source numbers.
+
+## Release Classes 6-8
+
+The workbook is the authoritative class/chapter map. One command builds all
+three books as an atomic release, retaining the previous complete release if any
+class fails:
+
+```powershell
+.venv/Scripts/python.exe stage0/release_science.py
+```
+
+On Windows the default destination is `D:\Science-Book-Releases`, entirely
+outside the Git checkout and the legacy downloaded workspace. Override it with
+`--release-dir PATH` or the `SCIENCE_RELEASE_DIR` environment variable. The
+release contains one folder per class plus `release-report.json` and
+`release-report.txt`, including chapter numbers, image and page counts, compiler
+diagnostics, image scale, and the exact Git commit/dirty state used.
+
+Use `--classes 6,8` for a subset, `--offline` or `--refresh` for cache behavior,
+and `--image-scale` to override the default. Optional reference validation uses
+repeatable `--reference CLASS=PDF` and matching `--chapter-map CLASS=JSON`
+arguments when a combined reference needs an explicit map.
 
 Publication uses an exclusive lock. If interrupted during publication, inspect
 `.<module>.publish.lock`, the staging directory, and the previous snapshot before

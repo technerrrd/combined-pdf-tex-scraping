@@ -19,7 +19,12 @@ NORMALIZATION = 'NFKC; ligatures; lowercase; whitespace/line-wrap joins; discret
 
 
 def norm(text):
-    text = unicodedata.normalize('NFKC', text).lower().replace('\u00ad', '')
+    # PDF font encodings often expose transliteration marks as separate glyphs or
+    # replacement characters. Compare their base letters without weakening
+    # mathematical symbol identity.
+    text = unicodedata.normalize('NFKD', text)
+    text = ''.join(character for character in text if unicodedata.category(character) != 'Mn')
+    text = text.lower().replace('\u00ad', '').replace('\ufffd', '')
     text = text.replace('◦', '°')
     text = re.sub(r'--+|[–—]', '', text)
     text = re.sub(r'(\w)-\s*\n\s*(\w)', r'\1\2', text)
@@ -28,7 +33,7 @@ def norm(text):
     text = re.sub(r'\\(?:frac|dfrac|tfrac|sqrt|text|mathrm|mathbf|mathit|left|right)\b', '', text)
     text = re.sub(r'\\(?:begin|end)\{[^}]+\}', '', text)
     # Preserve operator identity: opposite inequalities/arrows are not equivalent.
-    operators = {'→':' to ', '⟶':' to ', '←':' leftarrow ', '↔':' leftrightarrow ', '⇌':' rightleftharpoons ', '×':' times ', '÷':' div ', '±':' pm ', '≈':' approx ', '≤':' leq ', '≥':' geq ', '≠':' neq ', '∞':' infty ', '∴':' therefore ', '°':' circ ', '·':' cdot ', '=':' equals ', '+':' plus ', '−':' minus '}
+    operators = {'→':' to ', '⟶':' to ', '←':' leftarrow ', '↔':' leftrightarrow ', '⇌':' rightleftharpoons ', '×':' times ', '÷':' div ', '±':' pm ', '≈':' approx ', '≤':' leq ', '≥':' geq ', '≠':' neq ', '∞':' infty ', '∴':' therefore ', '°':'', '·':' cdot ', '=':' equals ', '+':' plus ', '−':' minus '}
     for symbol, word in operators.items(): text = text.replace(symbol, word)
     text = re.sub(r'[^\S\n]+', ' ', text)
     text = re.sub(r'(?<=\w)-(?=\w)', '', text)

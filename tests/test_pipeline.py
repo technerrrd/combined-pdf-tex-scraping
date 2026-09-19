@@ -8,6 +8,7 @@ import build_support as support
 import inline_content as inline
 from html_source import fit_image_scale, parse_html
 from scrape_chapters import arguments, module_name, rendered_text, select_chapters
+from release_science import CLASSES, workbook_rows
 from validate_against_pdf import coverage, map_pdf, reference_lines, validate_ranges, norm
 
 
@@ -109,7 +110,7 @@ def test_promo_table_is_skipped_before_span_validation():
     assert [e['type'] for e in parse_html(html)] == ['heading', 'body']
 
 
-@pytest.mark.parametrize('source,expected', [('CO₂','textsubscript{2}'),('x²','textsuperscript{2}'),('α → β',r'\alpha'),(r'\(\frac{a}{b}\)',r'\frac{a}{b}'),(r'\[\sqrt{x}\]',r'\sqrt{x}'),('Price $5 and 50%','\\$5')])
+@pytest.mark.parametrize('source,expected', [('CO₂','textsubscript{2}'),('x²','textsuperscript{2}'),('α → β',r'\alpha'),(r'\(A\rightarrow B\)',r'\rightarrow'),(r'\(\frac{a}{b}\)',r'\frac{a}{b}'),(r'\[\sqrt{x}\]',r'\sqrt{x}'),('Price $5 and 50%','\\$5')])
 def test_notation(source,expected):
     runs=inline.text_runs(source)
     assert expected in inline.tex(runs)
@@ -195,6 +196,24 @@ def test_headless_linux_compiler_environment():
     assert explicit['QT_QPA_PLATFORM'] == 'minimal'
 
 
+def test_compiler_python_environment_adds_windows_py_shim(tmp_path):
+    environment, shim = support.compiler_python_environment(
+        tmp_path, {'PATH': 'C:\\Windows'}, platform_name='nt', python_executable='C:\\Python312\\python.exe')
+    assert environment['PYTHON'].endswith('Python312\\python.exe')
+    assert environment['PATH'].split(support.os.pathsep)[0] == str(shim)
+    assert 'Python312' in (shim / 'py.cmd').read_text()
+
+
+def test_latex_diagnostics_report_only_actionable_layout_problems():
+    log = '''Overfull \\hbox (4.0pt too wide) in paragraph
+Overfull \\hbox (12.5pt too wide) in paragraph
+LaTeX Warning: Float too large for page by 20.0pt.
+Missing character: There is no ₹ in font cmr10!'''
+    diagnostics = support.latex_diagnostics(log, 'tex')
+    assert [item['kind'] for item in diagnostics] == ['overfull_hbox', 'oversized_float', 'missing_glyph']
+    assert [item['severity'] for item in diagnostics] == ['warning', 'error', 'error']
+
+
 def test_unsupported_and_matrix_mathml():
     for markup,expected in [('<mroot><mi>x</mi><mn>3</mn></mroot>',r'\sqrt[3]{x}'),('<msubsup><mi>x</mi><mn>1</mn><mn>2</mn></msubsup>','{x}_{1}^{2}'),('<mfenced><mi>x</mi><mi>y</mi></mfenced>',r'\left(x,y\right)'),('<mover><mi>x</mi><mo>^</mo></mover>',r'\hat{x}')]:
         runs=parse_html('<p><math>'+markup+'</math></p>')[0]['segments']
@@ -254,6 +273,12 @@ def test_balanced_image_scale(requested, width, height, expected):
     assert fit_image_scale(requested, width, height) == expected
 
 
+def test_image_scale_can_be_overridden_and_is_validated():
+    assert fit_image_scale(.60, 600, 600, 1) == .462
+    with pytest.raises(ValueError, match='scale factor'): fit_image_scale(.60, 600, 600, 0)
+    assert arguments([]).image_scale == .75
+
+
 def test_publication_keeps_previous_snapshot(tmp_path):
     destination=tmp_path/'module';destination.mkdir();(destination/'file').write_text('old')
     staged=tmp_path/'staged';staged.mkdir();(staged/'file').write_text('new')
@@ -305,6 +330,14 @@ def test_html_invalid_fetch_not_cached(tmp_path):
     path=tmp_path/'cache'
     with pytest.raises(support.BuildError):support.cached_fetch(session,'url',path,lambda data:parse_html(data.decode()))
     assert not path.exists()
+
+
+def test_html_repairs_math_delimiter_split_by_formatting():
+    html = '<main><h2>Compounds</h2><p>A <strong>ratio \\(2:1\\</strong>) is fixed.</p></main>'
+    elements = parse_html(html, 'https://example.test/chapter')
+    paragraph = next(item for item in elements if item['type'] == 'body')
+    assert inline.plain(paragraph['segments']) == 'A ratio 2:1 is fixed.'
+    assert any(run['kind'] == 'math' and run['text'] == '2:1' for run in paragraph['segments'])
 
 
 def test_retry_after_http_date():
@@ -359,6 +392,17 @@ def test_notes_exclude_optional_fact_callouts_and_all_quiz_variants():
 def test_typographic_dashes_match_tex_punctuation():
     assert norm('Health—not just disease')==norm('Health---not just disease')
     assert norm('20 °C') == norm('20 ◦C')
+    assert norm('Water boils at 100 °C') == norm('Water boils at 100 C')
+    assert norm(r'Water boils at 100 \circ C') == norm('Water boils at 100 °C')
+    assert norm('Saptaṛiṣhi, Dhruva tārā, Sūrya') == norm('Saptar.is.hi Dhruva t�ar�a S�urya')
+
+
+def test_release_workbook_preserves_class_sheet_order():
+    workbook = Path(__file__).parents[1] / 'Science-notes-links.xlsx'
+    rows = workbook_rows(workbook, [CLASSES[number]['sheet'] for number in (6, 7, 8)])
+    assert [number for number, _ in rows['Class 6th']] == [7, 8, 9, 10, 11, 12]
+    assert [number for number, _ in rows['Class 7th']] == [4, 5, 6, 7, 8, 9, 10]
+    assert [number for number, _ in rows['Class 8th']] == [3, 4, 7, 8, 9, 10, 12]
 
 
 def test_reference_lines_exclude_embedded_quiz():
@@ -397,3 +441,19 @@ def test_rendered_text_ignores_page_furniture_inside_a_paragraph():
     assert norm('Temperature often affects how much solute a solvent can dissolve. solubility increases with temperature.') in text
     assert norm('Chapter 1. Solutes and Solutions') not in text
     assert norm('Effect of temperature') in text
+
+
+def test_rendered_text_removes_decimal_section_header_between_split_lines():
+    class Rect: height = 800
+    class Page:
+        rect = Rect()
+        def __init__(self, lines): self.lines = lines
+        def get_text(self, kind):
+            return {'blocks': [{'lines': [
+                {'bbox': (0, y, 100, y + 10), 'spans': [{'text': text}]}
+                for y, text in self.lines]}]}
+    doc = [Page([(700, 'The Little')]),
+           Page([(40, '12.3. NIGHT SKY WATCHING'), (55, '49'), (90, "Dipper's handle points north.")])]
+    text = rendered_text(doc, {'start_page': 1, 'end_page': 2}, [])
+    assert norm("The Little Dipper's handle points north.") in text
+    assert norm('12.3. NIGHT SKY WATCHING') not in text
