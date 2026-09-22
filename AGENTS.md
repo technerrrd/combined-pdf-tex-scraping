@@ -1,8 +1,8 @@
 # Project instructions
 
-- Read HANDOFF.md before starting work.
+- Read HANDOFF.md and docs/CODEX_HANDOFF.md before starting work.
 - Check the current Git branch and working-tree status before changes.
-- Maintain AGENTS.md for durable project instructions and HANDOFF.md for current progress, decisions, validation, and next steps.
+- Maintain AGENTS.md for concise durable instructions, HANDOFF.md for the latest operational state, and docs/CODEX_HANDOFF.md for detailed context, design rationale, known problems, assumptions, and next steps.
 - Read CLAUDE.md for the inherited pipeline and formatting specifications. Preserve those rules unless the user changes them; flag discrepancies between the notes and implementation.
 - Use repository-relative paths in documentation.
 - Preserve user changes and avoid committing inputs, generated outputs, environments, logs, or secrets.

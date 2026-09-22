@@ -2,13 +2,13 @@
 
 ## Current objective and branch
 
-- Preserve source chapter numbering, compact Science layouts, literal rupee symbols, and exclude EduRev promotional page furniture for Class 6th-8th generation.
-- Branch: dev, tracking origin/dev.
-- Working in the Git clone; the downloaded source folder remains unchanged.
-- User authorized pushing these generator and template fixes to origin/dev on 2026-09-10.
+- Maintain the reliable Class 6-8 generation and atomic release pipeline while documenting its durable architecture, decisions, known limits, and next steps for future Codex sessions.
+- Branch: main, tracking origin/main. At the start of the documentation task, main, dev, origin/main, and origin/dev all pointed to f7c8117.
+- The user authorized pushing this documentation update to both main and dev on 2026-09-22.
 
 ## Completed work and decisions
 
+- Added docs/CODEX_HANDOFF.md as the detailed cross-session project handoff and updated AGENTS.md to route future sessions to it.
 - Added validated URL-keyed page/image caches, bounded retries, atomic cache writes, offline and refresh modes.
 - Added mandatory dependency/compiler preflight, staged builds, TeX and LyX-exported PDF compilation, bounded passes/timeouts, and retained logs.
 - Publication checks source structure, rendered prose, chapter bookmarks, and embedded image fingerprints/order. Previous successful output survives failed builds; successful replacements retain a timestamped snapshot.
@@ -34,6 +34,8 @@
 
 ## Tests and results
 
+- Documentation reconciliation on 2026-09-22: 68 regular tests passed; one integration-marked test was deselected.
+- The real compiler integration was attempted from both the temporary documentation worktree and the canonical checkout. Worktree runs reached LyX but failed with silent exit code 11 and an empty `lyx-export.log`. The canonical-checkout run compiled further but failed closed because TeX PDF validation reported the matrix line `A matrix: \\begin{matrix}1 & 0 \\\\ 0 & 1\\end{matrix}.` as missing. No application code changed in this task; investigate this current compiler/validation regression before treating integration as green.
 - Windows Python 3.12: 44 offline tests passed.
 - Ubuntu WSL Python 3.14: 44 offline tests passed.
 - After live-site parser fixes, Windows Python 3.12: 47 offline tests passed.
@@ -56,6 +58,7 @@
 
 ## Known limits and next steps
 
+- Investigate the 2026-09-22 compiler integration failure. Reproduce the matrix rendered-text comparison with the current TeX Live/LyX environment; do not weaken the fail-closed validation rule merely to make the test pass.
 - Class 8 Chapter 9 is published under the ignored `stage2/output/Class8-Ch9-Solutes/` directory with editable TeX/LyX, both PDFs, compiler logs, manifest, and validation reports.
 - Three reference-only lines remain unmatched: one diagram caption and two wrapped practice-link fragments. Coverage remains above the required threshold; the score is diagnostic rather than proof of perfect fidelity.
 - Class 8 Chapter 3 was an earlier calibration run and has not been republished after the newer normalization fixes.
