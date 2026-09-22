@@ -4,8 +4,8 @@ import unicodedata
 
 SYMBOLS = dict(zip('αβγδεζηθικλμνξπρστυφχψωΓΔΘΛΞΠΣΦΨΩ',
     ['\\'+s for s in 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi pi rho sigma tau upsilon phi chi psi omega Gamma Delta Theta Lambda Xi Pi Sigma Phi Psi Omega'.split()]))
-SYMBOLS.update(dict(zip('→←↔⇌⟶×÷±≈≤≥≠∞∴°·',
-    ['\\'+s for s in 'to leftarrow leftrightarrow rightleftharpoons longrightarrow times div pm approx leq geq neq infty therefore circ cdot'.split()])))
+SYMBOLS.update(dict(zip('→←↔⇌⟶×÷±≈≤≥≠∞∴°·√',
+    ['\\'+s for s in 'to leftarrow leftrightarrow rightleftharpoons longrightarrow times div pm approx leq geq neq infty therefore circ cdot surd'.split()])))
 COMMANDS = set('frac dfrac tfrac sqrt text mathrm mathbf mathit mathcal mathbb operatorname left right overline underline hat widehat bar vec dot ddot tilde widetilde sin cos tan log ln exp lim sum prod int iint partial nabla cdots ldots vdots ddots quad qquad space begin end cases matrix pmatrix bmatrix vmatrix aligned array displaystyle textstyle limits nonumber'.split()) | {v[1:] for v in SYMBOLS.values()}
 COMMANDS |= set('epsilon varepsilon vartheta varphi varrho varsigma omega degree angle perp parallel cup cap subset subseteq in notin forall exists emptyset lbrace rbrace langle rangle vert Vert'.split())
 COMMANDS |= set('rightarrow longleftarrow longleftrightarrow Rightarrow Leftarrow Leftrightarrow'.split())
@@ -137,7 +137,12 @@ def mathml(node):
         annotation = node.find('annotation', attrs={'encoding': re.compile('tex', re.I)})
         return check_math(annotation.get_text()) if annotation else mathml(children[0])
     if tag in ('math', 'mrow', 'mstyle', 'mpadded'):
-        return ' '.join(mathml(c) for c in children)
+        if children:
+            return ' '.join(mathml(c) for c in children)
+        # Some EduRev pages put a recoverable equation directly inside <math>
+        # without Presentation MathML child elements. Preserve that explicit
+        # math source while keeping genuinely empty nodes invalid.
+        return check_math(node.get_text().strip())
     if tag in ('mi', 'mn', 'mo'):
         return check_math(node.get_text().strip())
     if tag == 'mtext':

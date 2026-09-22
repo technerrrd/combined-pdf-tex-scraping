@@ -246,4 +246,8 @@ def write_report(directory, report):
     for row in report.get('coverage', []):
         lines.append(f"Chapter {row['chapter']} / {row['target']}: {row['present']}/{row['total']} ({row['coverage']:.1%})")
         lines.extend('  Missing: ' + text for text in row['unmatched'])
+    for row in report.get('infographic_validation', []):
+        lines.append(
+            f"Chapter {row['chapter']} / infographic: {row['page_count']} pages; "
+            f"grayscale RMS {row['grayscale_rms']}")
     atomic_write(Path(directory) / 'report.txt', '\n'.join(lines).encode('utf-8'))

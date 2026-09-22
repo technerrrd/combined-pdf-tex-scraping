@@ -29,6 +29,24 @@ def clean_text(text):
     return text.translate(_PUNCT)
 
 
+def repair_split_math_closers(root):
+    """Repair a closing TeX delimiter split across an inline style boundary."""
+    for node in list(root.find_all(string=True)):
+        value = str(node)
+        if not value.endswith('\\'):
+            continue
+        following = node.find_next(string=True)
+        if following is None:
+            continue
+        next_value = str(following)
+        closer = next_value[:1]
+        opener = {')': r'\(', ']': r'\['}.get(closer)
+        if not opener or value.count(opener) <= value.count('\\' + closer):
+            continue
+        node.replace_with(value + closer)
+        following.replace_with(next_value[1:])
+
+
 def is_content_image(src):
     return bool(src and _CONTENT_IMAGE_RE.search(src))
 

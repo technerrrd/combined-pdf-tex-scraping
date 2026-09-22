@@ -7,9 +7,11 @@ from PIL import Image
 import build_support as support
 import inline_content as inline
 from html_source import fit_image_scale, parse_html
-from scrape_chapters import arguments, module_name, rendered_text, select_chapters
+from scrape_chapters import arguments, module_name, prose_chunks, rendered_text, select_chapters
 from release_science import CLASSES, workbook_rows
 from validate_against_pdf import coverage, map_pdf, reference_lines, validate_ranges, norm
+from chapter_sources import (compare_pdf_pages, extract_infographic_pdf_url,
+                             find_reference_pdf, parse_chapter_sources)
 
 
 def response(status=200, content=b'good', headers=None):
@@ -110,7 +112,7 @@ def test_promo_table_is_skipped_before_span_validation():
     assert [e['type'] for e in parse_html(html)] == ['heading', 'body']
 
 
-@pytest.mark.parametrize('source,expected', [('CO₂','textsubscript{2}'),('x²','textsuperscript{2}'),('α → β',r'\alpha'),(r'\(A\rightarrow B\)',r'\rightarrow'),(r'\(\frac{a}{b}\)',r'\frac{a}{b}'),(r'\[\sqrt{x}\]',r'\sqrt{x}'),('Price $5 and 50%','\\$5')])
+@pytest.mark.parametrize('source,expected', [('CO₂','textsubscript{2}'),('x²','textsuperscript{2}'),('α → β',r'\alpha'),('√(a²+b²)',r'\surd'),(r'\(A\rightarrow B\)',r'\rightarrow'),(r'\(\frac{a}{b}\)',r'\frac{a}{b}'),(r'\[\sqrt{x}\]',r'\sqrt{x}'),('Price $5 and 50%','\\$5')])
 def test_notation(source,expected):
     runs=inline.text_runs(source)
     assert expected in inline.tex(runs)
@@ -122,6 +124,13 @@ def test_mathml_and_annotation():
     assert r'\frac{a}{\sqrt{b}}' in inline.tex(parse_html(html)[0]['segments'])
     html='<p><span class="katex"><span>duplicate</span><math><semantics><mi>x</mi><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span></p>'
     runs=parse_html(html)[0]['segments']; assert len(runs)==1 and runs[0]['text']=='x^2'
+
+
+def test_plain_text_inside_mathml_remains_explicit_math():
+    runs = parse_html('<p>For example, <math>9 - 5 = 4</math>.</p>')[0]['segments']
+    assert any(run['kind'] == 'math' and run['text'] == '9 - 5 = 4' for run in runs)
+    with pytest.raises(ValueError, match='Empty explicit equation'):
+        parse_html('<p><math></math></p>')
 
 
 @pytest.mark.parametrize('formula',[r'\input{secret}',r'\write18{bad}',r'\begin{document}x\end{document}','{x',r'\newcommand{x}{y}'])
@@ -161,6 +170,113 @@ def test_cli_selection_and_module():
     with pytest.raises(ValueError): module_name(arguments(['--module','../bad']))
     with pytest.raises(ValueError): module_name(arguments(['old','--module','new']))
     assert module_name(arguments(['--links','MyNotes.txt']))=='MyNotes'
+
+
+def test_xlsx_chapter_sources_normalize_and_preserve_order(tmp_path):
+    from openpyxl import Workbook
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Class 6th'
+    sheet.append(['Chapter Name', 'Chapter-Number',
+                  'Important Points and Formulas link', 'Infographic link'])
+    sheet.append(['Periimeter and Area', 'Chapter-6',
+                  'https://edurev.in/t/1/formulas', 'https://edurev.in/p/2/infographic'])
+    sheet.append([None, None, None, None])
+    sheet.append(['Fractions', 'Chapter-7',
+                  'edurev.in/t/3/fractions', 'https://edurev.in/p/4/fractions'])
+    path = tmp_path / 'links.xlsx'
+    workbook.save(path)
+    chapters = parse_chapter_sources(path, 'Class 6th')
+    assert [chapter['num'] for chapter in chapters] == [6, 7]
+    assert chapters[0]['name'] == 'Perimeter and Area'
+    assert chapters[1]['formula_url'].startswith('https://edurev.in/t/3/')
+    assert chapters[0]['infographic_url'].startswith('https://edurev.in/p/2/')
+
+
+def test_xlsx_chapter_sources_reject_invalid_schema(tmp_path):
+    from openpyxl import Workbook
+    workbook = Workbook()
+    workbook.active.title = 'Class 6th'
+    workbook.active.append(['Wrong', 'Headers'])
+    path = tmp_path / 'bad.xlsx'
+    workbook.save(path)
+    with pytest.raises(ValueError, match='headers'):
+        parse_chapter_sources(path, 'Class 6th')
+    with pytest.raises(ValueError, match='--sheet is required'):
+        parse_chapter_sources(path)
+
+
+@pytest.mark.parametrize('duplicate_name', [False, True])
+def test_xlsx_formula_only_chapters_and_duplicate_display_name(tmp_path, duplicate_name):
+    from openpyxl import Workbook
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Maths'
+    headers = ['Chapter Name', 'Chapter-Number',
+               'Important Points and Formulas link', 'Infographic link']
+    row = ['Connecting the Dots', 'Chapter-13', 'https://edurev.in/t/13/dots', None]
+    if duplicate_name:
+        headers.insert(0, 'Chapter Name')
+        row.insert(0, 'Connecting the Dots...')
+    sheet.append(headers)
+    sheet.append(row)
+    path = tmp_path / 'formulas.xlsx'
+    workbook.save(path)
+    chapters = parse_chapter_sources(path, 'Maths')
+    assert len(chapters) == 1
+    assert chapters[0]['num'] == 13
+    assert chapters[0]['name'] == ('Connecting the Dots...' if duplicate_name else 'Connecting the Dots')
+    assert chapters[0]['infographic_url'] is None
+    # A formula URL remains required even when no infographic is supplied.
+    sheet.cell(2, 4 if duplicate_name else 3).value = None
+    workbook.save(path)
+    with pytest.raises(ValueError, match='missing required value'):
+        parse_chapter_sources(path, 'Maths')
+
+
+def test_infographic_pdf_extraction_is_exact_and_host_limited():
+    url = 'https://cn.edurev.in/files/1421561_example.pdf'
+    assert extract_infographic_pdf_url(f'<script>viewer = "{url}"</script>') == url
+    with pytest.raises(ValueError, match='exactly one'):
+        extract_infographic_pdf_url('<p>No PDF</p>')
+    with pytest.raises(ValueError, match='exactly one'):
+        extract_infographic_pdf_url(f'{url} https://cn.edurev.in/files/other.pdf')
+
+
+def test_reference_pdf_resolution_and_visual_comparison(tmp_path):
+    import pymupdf
+    formula = tmp_path / 'Chapter-6-Important-formulas.pdf'
+    infographic = tmp_path / 'Infographics-Chapter-6.pdf'
+    with pymupdf.open() as document:
+        page = document.new_page(width=300, height=500)
+        page.draw_rect((20, 20, 280, 480), color=(1, 0, 0), width=3)
+        page.insert_text((40, 60), 'Perimeter and Area')
+        document.save(infographic)
+    formula.write_bytes(infographic.read_bytes())
+    assert find_reference_pdf(tmp_path, 6, 'formula') == formula
+    assert find_reference_pdf(tmp_path, 6, 'infographic') == infographic
+    assert compare_pdf_pages(infographic.read_bytes(), infographic) == [0.0]
+
+
+def test_infographic_writers_use_one_page_uncropped_layout(tmp_path):
+    import convert
+    media = tmp_path / 'media'
+    media.mkdir()
+    elements = [
+        dict(type='heading', level='section', text='Infographics', page_break_before=True),
+        dict(type='infographic', filename='page1.png', page_number=1, page_count=2),
+        dict(type='infographic', filename='page2.png', page_number=2, page_count=2),
+    ]
+    tex_path = tmp_path / 'book.tex'
+    lyx_path = tmp_path / 'book.lyx'
+    convert.write_tex(elements, tex_path, media)
+    convert.write_lyx(elements, lyx_path, media)
+    tex = tex_path.read_text()
+    lyx = lyx_path.read_text()
+    assert tex.index(r'\section{Infographics}') < tex.index('media/page1.png') < tex.index('media/page2.png')
+    assert 'height=.80\\textheight,keepaspectratio' in tex
+    assert lyx.index('Infographics') < lyx.index('media/page1.png') < lyx.index('media/page2.png')
+    assert '\theight 70page%\n\tkeepAspectRatio' in lyx
 
 
 def test_publication_rollback(tmp_path,monkeypatch):
@@ -229,6 +345,16 @@ def test_mathjax_script_and_literal_escaping():
     assert inline.plain(parse_html('<p>Visible<!-- hidden --> text.</p>')[0]['segments'])=='Visible text.'
 
 
+def test_math_closer_split_across_bold_boundary_is_rejoined():
+    runs = parse_html(r'<p>A fixed <strong>ratio \(2:1\</strong>) is used.</p>')[0]['segments']
+    assert inline.plain(runs) == r'A fixed ratio 2:1 is used.'
+    assert any(run['kind'] == 'math' and run['text'] == '2:1' for run in runs)
+
+
+def test_standard_right_arrow_command_is_preserved():
+    assert inline.check_math(r'A \rightarrow B') == r'A \rightarrow B'
+
+
 def test_docx_fallback_legacy_segments(tmp_path):
     from docx import Document
     import convert
@@ -260,6 +386,14 @@ def test_original_chapter_numbers_compact_spacing_and_unicode_rupee(tmp_path):
     assert 'setcounter{chapter}{6}' in lyx
     assert r'\newunicodechar{₹}{\rupee}' in lyx
     assert '₹ 7' in tex and '₹ 7' in lyx
+
+
+def test_lyx_chapter_banner_uses_title_size_that_fits_long_science_names(tmp_path):
+    import convert
+    convert.copy_template_assets(convert.TEMPLATE_DIR, tmp_path)
+    structure = (tmp_path / 'structure.tex').read_text(encoding='utf-8')
+    assert r'node {\Large\sffamily\bfseries\color{black}\thechapter. #1\strut}' in structure
+    assert r'node {\huge\sffamily\bfseries\color{black}\thechapter. #1\strut}' not in structure
 
 
 @pytest.mark.parametrize(('requested','width','height','expected'), [
@@ -395,6 +529,8 @@ def test_typographic_dashes_match_tex_punctuation():
     assert norm('Water boils at 100 °C') == norm('Water boils at 100 C')
     assert norm(r'Water boils at 100 \circ C') == norm('Water boils at 100 °C')
     assert norm('Saptaṛiṣhi, Dhruva tārā, Sūrya') == norm('Saptar.is.hi Dhruva t�ar�a S�urya')
+    assert norm('Saptaṛiṣhi and Sūrya') == norm('Saptar.is.hi and S¯urya')
+    assert norm('Re\x01ectional \x02gure on the \x03oor') == norm('Reflectional figure on the floor')
 
 
 def test_release_workbook_preserves_class_sheet_order():
@@ -403,6 +539,12 @@ def test_release_workbook_preserves_class_sheet_order():
     assert [number for number, _ in rows['Class 6th']] == [7, 8, 9, 10, 11, 12]
     assert [number for number, _ in rows['Class 7th']] == [4, 5, 6, 7, 8, 9, 10]
     assert [number for number, _ in rows['Class 8th']] == [3, 4, 7, 8, 9, 10, 12]
+
+
+def test_reference_coverage_ignores_multilevel_heading_numbers_and_corrupt_logo():
+    result = coverage(['1.2 Formula (Regular Polygon)', 'UREV', 'of 6'],
+                      'Formula (Regular Polygon)', 9, 'parsed', {})
+    assert result['coverage'] == 1
 
 
 def test_reference_lines_exclude_embedded_quiz():
@@ -433,13 +575,14 @@ def test_rendered_text_ignores_page_furniture_inside_a_paragraph():
 
     doc = [
         Page([(700, 'Temperature often affects how much solute a solvent can dissolve.')]),
-        Page([(40, '10'), (60, 'Chapter 1. Solutes and Solutions'),
+        Page([(40, '10'), (60, 'Chapter 1. Solutes and Solutions'), (70, '1.2. Topic'),
               (90, 'solubility increases with temperature.'), (300, 'Effect of temperature')]),
     ]
     page_range = {'start_page': 1, 'end_page': 2}
     text = rendered_text(doc, page_range, ['Solutes and Solutions', 'Effect of temperature'])
     assert norm('Temperature often affects how much solute a solvent can dissolve. solubility increases with temperature.') in text
     assert norm('Chapter 1. Solutes and Solutions') not in text
+    assert norm('1.2. Topic') not in text
     assert norm('Effect of temperature') in text
 
 
@@ -457,3 +600,17 @@ def test_rendered_text_removes_decimal_section_header_between_split_lines():
     text = rendered_text(doc, {'start_page': 1, 'end_page': 2}, [])
     assert norm("The Little Dipper's handle points north.") in text
     assert norm('12.3. NIGHT SKY WATCHING') not in text
+
+
+def test_rendered_prose_validation_keeps_style_boundary_context():
+    runs = [
+        dict(kind='text', text='Clouds cause ', bold=False),
+        dict(kind='text', text='precipitation', bold=True),
+        dict(kind='text', text='-rain, snow or hail.', bold=False),
+        dict(kind='math', text='x^2', bold=False),
+        dict(kind='text', text='Further prose.', bold=False),
+    ]
+    assert prose_chunks(runs) == [
+        'Clouds cause precipitation-rain, snow or hail.',
+        'Further prose.',
+    ]

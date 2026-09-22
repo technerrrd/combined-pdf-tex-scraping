@@ -12,16 +12,16 @@ import inline_content as inline
 from build_support import ValidationError
 
 ARTIFACT = re.compile(
-    r'edurev|durev|^edur$|table of contents|^chapter notes\s*:|chapter notes\s*\|\s*science class|'
-    r'^\d+\s*(?:of|/)\s*\d+$|^\d{2}/\d{2}/\d{2}|^https?://|^Firefox$|'
+    r'edurev|durev|^edur$|^urev$|table of contents|^chapter notes\s*:|chapter notes\s*\|\s*science class|'
+    r'^\d+\s*(?:of|/)\s*\d+$|^of\s+\d+$|^\d{2}/\d{2}/\d{2}|^https?://|^Firefox$|'
     r'^view (solution|more)|multiple choice question|^try yourself:|short-answer-questions-.*/', re.I)
-NORMALIZATION = 'NFKC; ligatures; lowercase; whitespace/line-wrap joins; discretionary hyphens; equivalent math symbols; list markers and standalone bold section numbers; punctuation removal. Full normalized lines, never prefixes.'
+NORMALIZATION = 'NFKD; ligatures; lowercase; combining-mark and punctuation removal; whitespace/line-wrap joins; discretionary hyphens; equivalent math symbols; list markers and standalone bold section numbers. Full normalized lines, never prefixes.'
 
 
 def norm(text):
-    # PDF font encodings often expose transliteration marks as separate glyphs or
-    # replacement characters. Compare their base letters without weakening
-    # mathematical symbol identity.
+    # Restore browser-print ligatures, then normalize transliteration marks and
+    # replacement characters without weakening mathematical symbol identity.
+    text = text.translate({1: 'fl', 2: 'fi', 3: 'fl'})
     text = unicodedata.normalize('NFKD', text)
     text = ''.join(character for character in text if unicodedata.category(character) != 'Mn')
     text = text.lower().replace('\u00ad', '').replace('\ufffd', '')
@@ -102,7 +102,7 @@ def map_pdf(doc, chapters, explicit=None, generated=False):
 
 def coverage(lines, target, chapter, label, page_range):
     normalized = norm(target)
-    lines = [re.sub(r'^\s*(?:\d+\.|[a-zA-Z][.)])\s+', '', line) for line in lines]
+    lines = [re.sub(r'^\s*(?:\d+(?:\.\d+)*\.?|[a-zA-Z][.)])\s+', '', line) for line in lines]
     usable = [line for line in lines if norm(line) and not ARTIFACT.search(line.strip()) and not re.fullmatch(r'chapter\s+\d+', line.strip(), re.I)]
     if not usable: raise ValidationError(f'Chapter {chapter}: no extractable reference text; OCR is not performed')
     unmatched = [line for line in usable if norm(line) not in normalized]

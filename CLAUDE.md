@@ -15,7 +15,7 @@
 
 ---
 
-## Current primary pipeline (v4.3)
+## Current primary pipeline (v4.4)
 
 Read `README.md` for current commands and setup. `AGENTS.md` owns maintenance
 instructions; `HANDOFF.md` records progress and validation.
@@ -26,7 +26,11 @@ LyX, and compiles both PDFs. It stages each build and publishes only after all
 required checks pass. Failed runs retain diagnostics and preserve existing output.
 
 - CLI: `python stage0/scrape_chapters.py --links input/CHAPTER-LINKS --module Notes --title "Notes"`.
+- XLSX inputs use `--sheet`; paired Maths rows provide formula `/t/` and
+  infographic `/p/` URLs in workbook order.
 - Optional explicit reference: `--pdf input/reference.pdf`; no implicit PDF selection.
+- Optional paired references: `--reference-dir PATH` validates each chapter's
+  formula PDF plus the page count and rendered similarity of its infographic PDF.
 - Optional reference mapping: `--chapter-map input/chapter-map.json`, a list of
   `{chapter, start_page, end_page}` entries with inclusive one-based page ranges.
 - Reference coverage must reach 95% by default for every selected chapter in parsed
@@ -42,6 +46,8 @@ required checks pass. Failed runs retain diagnostics and preserve existing outpu
   source-requested sizes, fit within 52% text width and 30% usable page height,
   then use a configurable multiplier of 0.75 by default (effective maximums
   about 39% and 22.5%) without cropping, distortion, or source-order changes.
+- Paired infographic PDF pages render to 200-DPI PNGs and appear after the
+  chapter's formula notes, one uncropped page at a time.
 - The all-class release command reads the workbook and atomically publishes
   Class 6-8 outside the checkout, defaulting on Windows to
   `D:\Science-Book-Releases`, with Git provenance and compiler diagnostics.

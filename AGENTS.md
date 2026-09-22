@@ -18,6 +18,8 @@
 - Primary: stage0/scrape_chapters.py reads input/CHAPTER-LINKS and reuses stage2/html_source.py and stage2/convert.py to produce TeX and LyX.
 - Use cached HTML as the source; stage0/validate_against_pdf.py is a read-only completeness check against an optional PDF.
 - Keep the PDF/DOCX pipeline as a fallback.
+- XLSX chapter inputs may pair formula and infographic URLs. Preserve workbook
+  order and keep each chapter's formula content before its infographic pages.
 - Preserve html5lib parsing, inline spacing, source image order, and the LyX template.
 - Do not invent missing source content or transcribe formulas from images; see CLAUDE.md for detailed exceptions and formatting rules.
 

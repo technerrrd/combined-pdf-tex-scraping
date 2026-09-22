@@ -18,6 +18,7 @@ def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('module_alias', nargs='?')
     parser.add_argument('--links', type=Path, default=ROOT / 'input' / 'CHAPTER-LINKS')
+    parser.add_argument('--sheet')
     parser.add_argument('--module')
     parser.add_argument('--title')
     parser.add_argument('--chapters')
@@ -27,6 +28,7 @@ def arguments(argv=None):
     modes.add_argument('--refresh', action='store_true')
     modes.add_argument('--offline', action='store_true')
     parser.add_argument('--pdf', type=Path)
+    parser.add_argument('--reference-dir', type=Path)
     parser.add_argument('--chapter-map', type=Path)
     parser.add_argument('--coverage-threshold', type=float, default=.95)
     parser.add_argument('--image-scale', type=float, default=.75,
@@ -97,6 +99,23 @@ def rendered_text(doc, page_range, furniture):
     return norm('\n'.join(lines))
 
 
+def prose_chunks(segments):
+    """Group styled text runs while keeping explicit equations as boundaries."""
+    import inline_content as inline
+    chunks = []
+    current = []
+    for segment in inline.adapt(segments):
+        if segment['kind'] == 'math':
+            if current:
+                chunks.append(''.join(current))
+                current = []
+        else:
+            current.append(segment['text'])
+    if current:
+        chunks.append(''.join(current))
+    return chunks
+
+
 def check_structure(chapters, directory, module, outputs):
     import inline_content as inline
     from build_support import ValidationError, validate_image
@@ -120,7 +139,7 @@ def check_structure(chapters, directory, module, outputs):
                 heading_counts[e['level']] = heading_counts.get(e['level'], 0) + 1
                 headings[ch['num']].append(inline.plain(e['segments']) if 'segments' in e else e['text'])
             if kind == 'list': list_items += len(e['items'])
-            if kind == 'image':
+            if kind in ('image', 'infographic'):
                 asset = directory / 'media' / e['filename']
                 validate_image(asset.read_bytes())
                 images[ch['num']].append(pymupdf.Pixmap(asset.read_bytes()).digest)
@@ -132,21 +151,20 @@ def check_structure(chapters, directory, module, outputs):
             if kind == 'table': segments.extend(c for r in e['rows'] for c in r if isinstance(c, list))
             for runs in segments:
                 if kind != 'heading':
-                    # Validate the complete prose of each paragraph/list cell. Math
-                    # has dedicated source checks because PDF extraction is unstable.
-                    # Checking each
-                    # inline run separately creates false gaps when punctuation sits
-                    # at a bold/plain boundary (for example ``precipitation`` + ``-rain``).
+                    # Validate complete mixed-style prose. Math has dedicated
+                    # source checks because PDF extraction is unstable.
                     adapted = inline.adapt(runs)
                     prose_only = ''.join(segment['text'] for segment in adapted
                                          if segment['kind'] != 'math')
                     if len(norm(prose_only)) >= 3:
-                        # Retain inline operators/units in mixed prose, but leave
-                        # formula-only blocks to the dedicated equation checks.
-                        # Spaces keep a TeX command at a run boundary from absorbing
-                        # the following prose letter (``\\circ`` + ``C``).
+                        # Matrix/display math is verified in TeX/LyX above, but
+                        # PDF text extraction does not preserve its source markup.
+                        # Keep simple inline operators and units in the prose
+                        # comparison while treating complex equations as a space.
                         prose[ch['num']].append(''.join(
-                            f" {segment['text']} " if segment['kind'] == 'math' else segment['text']
+                            (' ' if segment.get('display') or r'\begin{' in segment['text']
+                             else f" {segment['text']} ")
+                            if segment['kind'] == 'math' else segment['text']
                             for segment in adapted))
                 rendered = inline.tex(runs)
                 if rendered and rendered not in tex: raise ValidationError('Generated TeX lost source content')
@@ -184,28 +202,90 @@ def check_structure(chapters, directory, module, outputs):
     return stats
 
 
+def download_content_images(elements, chapter, session, media, args, report):
+    """Download, normalize, and name ordinary formula-page images."""
+    from build_support import BuildError, atomic_write, cached_fetch, cache_path, validate_image
+    import html_source
+    import io
+    from PIL import Image
+
+    for element in elements:
+        if element['type'] != 'image':
+            continue
+        try:
+            image = cached_fetch(
+                session, element['url'], cache_path(args.cache_dir, element['url'], 'images'),
+                validate_image, args.refresh, args.offline)
+            with Image.open(io.BytesIO(image)) as decoded:
+                extension = '.png' if decoded.format == 'PNG' else '.jpg'
+                element['scale'] = html_source.fit_image_scale(
+                    element['scale'], decoded.width, decoded.height,
+                    args.image_scale)
+                encoded = io.BytesIO()
+                if decoded.mode in ('RGBA', 'LA') or 'transparency' in decoded.info:
+                    rgba = decoded.convert('RGBA')
+                    background = Image.new('RGBA', rgba.size, 'white')
+                    background.alpha_composite(rgba)
+                    normalized = background.convert('RGB')
+                else:
+                    normalized = decoded.convert('RGB')
+                normalized.save(
+                    encoded, format='PNG' if extension == '.png' else 'JPEG')
+            element['filename'] = hashlib.sha256(element['url'].encode()).hexdigest() + extension
+            atomic_write(media / element['filename'], encoded.getvalue())
+        except (BuildError, ValueError, OSError) as exc:
+            report['errors'].append(
+                f"Chapter {chapter['num']} image {element['url']}: {exc}")
+
+
+def validate_reference_directory(directory, chapters, outputs, threshold):
+    """Check each chapter's formula content against its supplied reference PDF."""
+    import pymupdf
+    from chapter_sources import find_reference_pdf
+    from validate_against_pdf import validate_reference
+
+    rows = []
+    for chapter in chapters:
+        reference = find_reference_pdf(directory, chapter['num'], 'formula')
+        with pymupdf.open(reference) as document:
+            mapping = [{
+                'chapter': chapter['num'],
+                'start_page': 1,
+                'end_page': len(document),
+            }]
+        rows.extend(validate_reference(reference, [chapter], outputs, threshold, mapping))
+    return rows
+
+
 def build(args):
-    from build_support import (BuildError, ValidationError, cached_fetch, cache_path, validate_image,
+    from build_support import (BuildError, ValidationError, cached_fetch, cache_path,
                                atomic_write, preflight, compile_documents, publish, write_report)
     from validate_against_pdf import validate_reference, NORMALIZATION
     import requests
     import html_source
     import convert
-    from scrape_images import parse_links
+    from chapter_sources import (compare_pdf_pages, extract_infographic_pdf_url,
+                                 find_reference_pdf, parse_chapter_sources,
+                                 render_pdf_pages, validate_pdf)
     module = module_name(args)
     if not 0 < args.coverage_threshold <= 1: raise ValueError('Coverage threshold must be in (0,1]')
     if not 0 < args.image_scale <= 1: raise ValueError('--image-scale must be in (0,1]')
     if args.chapter_map and not args.pdf: raise ValueError('--chapter-map requires --pdf')
+    if args.pdf and args.reference_dir: raise ValueError('--pdf and --reference-dir cannot be combined')
     if args.pdf and not args.pdf.is_file(): raise ValueError('Reference PDF does not exist')
+    if args.reference_dir and not args.reference_dir.is_dir(): raise ValueError('Reference directory does not exist')
     if not args.links.is_file(): raise ValueError('Chapter links file does not exist')
-    chapters = select_chapters(parse_links(args.links), args.chapters)
+    chapters = select_chapters(parse_chapter_sources(args.links, args.sheet), args.chapters)
     mapping = json.loads(args.chapter_map.read_text(encoding='utf-8-sig')) if args.chapter_map else None
     for ch in chapters:
-        if urlparse(ch['url']).scheme not in ('http', 'https'): raise ValueError('Only HTTP(S) chapter links supported')
+        for url in (ch['formula_url'], ch.get('infographic_url')):
+            if url and urlparse(url).scheme not in ('http', 'https'):
+                raise ValueError('Only HTTP(S) chapter links supported')
     output_root = args.output_dir.resolve()
     output_root.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=module + '-', dir=output_root))
-    report = dict(status='failed', reference_status='not checked', errors=[], coverage=[], normalization=NORMALIZATION)
+    report = dict(status='failed', reference_status='not checked', errors=[], coverage=[],
+                  infographic_validation=[], normalization=NORMALIZATION)
     try:
         programs = preflight()
         if not (convert.TEMPLATE_DIR / 'main.lyx').is_file(): raise BuildError('Required LyX template is missing')
@@ -215,38 +295,68 @@ def build(args):
             session.headers.update({'User-Agent': html_source._UA})
             for ch in chapters:
                 try:
-                    data = cached_fetch(session, ch['url'], cache_path(args.cache_dir, ch['url'], 'pages'),
-                        lambda data: html_source.parse_html(data.decode('utf-8-sig'), ch['url']), args.refresh, args.offline)
-                    elements = html_source.parse_html(data.decode('utf-8-sig'), ch['url'])
-                    for el in elements:
-                        if el['type'] != 'image': continue
-                        try:
-                            image = cached_fetch(session, el['url'], cache_path(args.cache_dir, el['url'], 'images'), validate_image, args.refresh, args.offline)
-                            # URL hash prevents cross-chapter basename collisions.
-                            import io
-                            from PIL import Image
-                            with Image.open(io.BytesIO(image)) as im:
-                                extension = '.png' if im.format == 'PNG' else '.jpg'
-                                el['scale'] = html_source.fit_image_scale(
-                                    el['scale'], im.width, im.height, args.image_scale)
-                                encoded = io.BytesIO()
-                                im.convert('RGB').save(encoded, format='PNG' if extension == '.png' else 'JPEG')
-                            el['filename'] = hashlib.sha256(el['url'].encode()).hexdigest() + extension
-                            atomic_write(media / el['filename'], encoded.getvalue())
-                        except (BuildError, ValueError, OSError) as exc:
-                            report['errors'].append(f"Chapter {ch['num']} image {el['url']}: {exc}")
+                    formula_url = ch['formula_url']
+                    data = cached_fetch(
+                        session, formula_url, cache_path(args.cache_dir, formula_url, 'pages'),
+                        lambda value: html_source.parse_html(value.decode('utf-8-sig'), formula_url),
+                        args.refresh, args.offline)
+                    formula_elements = html_source.parse_html(data.decode('utf-8-sig'), formula_url)
+                    download_content_images(formula_elements, ch, session, media, args, report)
+                    elements = list(formula_elements)
+                    if ch.get('infographic_url'):
+                        elements.insert(0, dict(
+                            type='heading', level='section',
+                            text=f"Important Formulas: {ch['name']}"))
+                        infographic_url = ch['infographic_url']
+                        infographic_page = cached_fetch(
+                            session, infographic_url,
+                            cache_path(args.cache_dir, infographic_url, 'pages'),
+                            lambda value: extract_infographic_pdf_url(value.decode('utf-8-sig')),
+                            args.refresh, args.offline)
+                        pdf_url = extract_infographic_pdf_url(infographic_page.decode('utf-8-sig'))
+                        pdf_data = cached_fetch(
+                            session, pdf_url, cache_path(args.cache_dir, pdf_url, 'documents'),
+                            validate_pdf, args.refresh, args.offline)
+                        rendered_pages = render_pdf_pages(pdf_data, dpi=200)
+                        ch['infographic_pdf_url'] = pdf_url
+                        ch['infographic_page_count'] = len(rendered_pages)
+                        if args.reference_dir:
+                            infographic_reference = find_reference_pdf(
+                                args.reference_dir, ch['num'], 'infographic')
+                            rms = compare_pdf_pages(pdf_data, infographic_reference)
+                            report['infographic_validation'].append({
+                                'chapter': ch['num'],
+                                'page_count': len(rendered_pages),
+                                'reference': infographic_reference.name,
+                                'grayscale_rms': rms,
+                            })
+                        elements.append(dict(
+                            type='heading', level='section', text='Infographics',
+                            page_break_before=True))
+                        for page_number, png in enumerate(rendered_pages, start=1):
+                            filename = hashlib.sha256(
+                                f'{pdf_url}#page={page_number}'.encode()).hexdigest() + '.png'
+                            atomic_write(media / filename, png)
+                            elements.append(dict(
+                                type='infographic', filename=filename,
+                                source_url=pdf_url, page_number=page_number,
+                                page_count=len(rendered_pages), dpi=200))
                     ch['elements'] = elements
                     combined.append(dict(type='heading', level='chapter', text=ch['name'], number=ch['num']))
                     combined.extend(elements)
                 except (BuildError, ValueError, OSError) as exc:
-                    report['errors'].append(f"Chapter {ch['num']} {ch['url']}: {exc}")
+                    report['errors'].append(f"Chapter {ch['num']} {ch['formula_url']}: {exc}")
         if report['errors']: raise BuildError('Selected chapters are incomplete')
         convert.write_tex(combined, staging / (module + '.tex'), media)
         convert.write_lyx(combined, staging / (module + '.lyx'), media, template_dir=convert.TEMPLATE_DIR)
         convert.copy_template_assets(convert.TEMPLATE_DIR, staging)
         import inline_content as inline
         tex_path = staging / (module + '.tex')
-        source = tex_path.read_text(encoding='utf-8').replace(r'\begin{document}', r'\usepackage{hyperref}' + '\n' + r'\begin{document}' + '\n' + r'\title{' + inline.escape(args.title or module) + r'}\maketitle')
+        source = tex_path.read_text(encoding='utf-8').replace(
+            r'\begin{document}',
+            r'\usepackage{hyperref}' + '\n' + r'\begin{document}' + '\n' +
+            r'\title{' + inline.escape(args.title or module) + '}' + '\n' +
+            r'\author{V.L Memorial Public School}' + '\n' + r'\date{}\maketitle')
         tex_path.write_text(source, encoding='utf-8')
         lyx_path = staging / (module + '.lyx')
         source = lyx_path.read_text(encoding='utf-8')
@@ -262,6 +372,13 @@ def build(args):
             report['reference_status'] = 'failed'
             report['coverage'] = validate_reference(args.pdf, chapters, outputs, args.coverage_threshold, mapping)
             if any(r['coverage'] < args.coverage_threshold for r in report['coverage']): raise ValidationError('Reference coverage below threshold')
+            report['reference_status'] = 'passed'
+        elif args.reference_dir:
+            report['reference_status'] = 'failed'
+            report['coverage'] = validate_reference_directory(
+                args.reference_dir, chapters, outputs, args.coverage_threshold)
+            if any(row['coverage'] < args.coverage_threshold for row in report['coverage']):
+                raise ValidationError('Reference coverage below threshold')
             report['reference_status'] = 'passed'
         manifest = dict(
             module=module, title=args.title or module, chapters=chapters,

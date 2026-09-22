@@ -4,6 +4,11 @@ The primary pipeline turns EduRev chapter links into editable TeX and themed LyX
 then compiles both to PDF. Output is published only after downloads, structure,
 compilation, and any requested reference-PDF checks pass.
 
+For paired Maths material, `--links` also accepts an XLSX sheet containing one
+formula URL and one infographic URL per chapter. Formula notes remain editable;
+each embedded infographic PDF page is rendered at 200 DPI and placed uncropped
+after that chapter's formula content.
+
 ## Setup
 
 Use Python 3.12 or newer, LyX 2.4, and TeX Live with pdfLaTeX. Create a project
@@ -58,9 +63,20 @@ Linux uses the same arguments:
 .venv-linux/bin/python stage0/scrape_chapters.py --links input/CHAPTER-LINKS --module ScienceNotes --title "Science Notes"
 ```
 
+Paired XLSX example:
+
+```bash
+.venv-linux/bin/python stage0/scrape_chapters.py --links Maths-notes-links.xlsx --sheet "Class 6th" --module Class6-Maths --title "Class 6 Maths" --reference-dir "Class 6th Maths"
+```
+
+Workbook headers must be exactly `Chapter Name`, `Chapter-Number`,
+`Important Points and Formulas link`, and `Infographic link`. Blank rows are
+ignored. A missing scheme is repaired only for an `edurev.in/...` URL.
+
 | Option | Behavior |
 | --- | --- |
 | `--links PATH` | Defaults to `input/CHAPTER-LINKS`, relative to the repository. |
+| `--sheet NAME` | Required for XLSX input; selects the worksheet containing paired chapter links. |
 | `--module NAME` | Safe output filename; defaults to the links filename stem. The old positional name remains an alias. |
 | `--title TEXT` | Cover title; defaults to module name. |
 | `--chapters 1,3-5` | Select chapter numbers, retaining links-file order. |
@@ -69,6 +85,7 @@ Linux uses the same arguments:
 | `--refresh` | Re-fetch selected pages and images, replacing cached data only after validation. |
 | `--offline` | Require valid cached pages and images. Cannot combine with refresh. |
 | `--pdf PATH` | Explicit reference PDF. No automatic PDF selection. |
+| `--reference-dir PATH` | Directory containing one formula and one infographic reference PDF per chapter; cannot be combined with `--pdf`. |
 | `--chapter-map PATH` | Explicit reference chapter page ranges when mapping is ambiguous; requires `--pdf`. |
 | `--coverage-threshold 0.95` | Required coverage per chapter for parsed content and each compiled PDF; range `(0, 1]`. |
 | `--image-scale 0.75` | Multiplier applied after balanced page-fit sizing; range `(0, 1]`. |
@@ -155,6 +172,10 @@ ranges. Coverage is a diagnostic measure, not proof of perfect fidelity.
 Scanned/empty references require external OCR; this pipeline does not perform OCR.
 Ambiguous mappings and low coverage block publication. Without `--pdf`, reference
 coverage is explicitly **not checked**; all other checks still apply.
+
+With `--reference-dir`, formula PDFs use the same 95% text threshold for parsed
+content and both compiled PDFs. Infographic PDFs must have the same page count as
+the online embedded source and pass a grayscale rendered-page similarity check.
 
 An explicit map is a JSON list of inclusive, one-based page ranges:
 

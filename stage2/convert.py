@@ -362,6 +362,8 @@ def write_tex(elements, out_path: Path, media_dir: Path):
 
         if t == 'heading':
             close_enum()
+            if el.get('page_break_before'):
+                lines.append('\\clearpage\n')
             lvl = el['level']
             txt = render_tex_segments(el.get('segments', [(el['text'], False)]))
             cmd = {'chapter': 'chapter', 'section': 'section',
@@ -395,6 +397,16 @@ def write_tex(elements, out_path: Path, media_dir: Path):
             lines.append('\\centering\n')
             lines.append(f'\\includegraphics[width={scale}\\textwidth]{{{img_rel}}}\n')
             lines.append('\\end{figure}\n\n')
+
+        elif t == 'infographic':
+            close_enum()
+            fname = el['filename']
+            img_rel = f'media/{fname}'
+            lines.append('\\begin{center}\n')
+            lines.append(f'\\includegraphics[width=\\textwidth,height=.80\\textheight,keepaspectratio]{{{img_rel}}}\n')
+            lines.append('\\end{center}\n')
+            if el.get('page_number', 1) < el.get('page_count', 1):
+                lines.append('\\clearpage\n')
 
         elif t == 'list':
             close_enum()
@@ -884,6 +896,40 @@ def _draw_atom(ax):
             fontsize=12, ha='center')
 
 
+def _draw_mathematics(ax, chapter_name):
+    """Draw a neutral geometry/number motif for Maths chapter banners."""
+    import matplotlib.patches as mpatches
+    import numpy as np
+
+    # Geometry panel: a measured rectangle and a line of symmetry.
+    rectangle = mpatches.Rectangle((1.0, 1.25), 3.0, 2.25, fill=False,
+                                   edgecolor=OCRE_HEX, linewidth=3)
+    ax.add_patch(rectangle)
+    ax.plot([2.5, 2.5], [1.0, 3.75], color=BLUE, lw=2, linestyle='--')
+    ax.text(2.5, 0.85, 'length', color=LGRAY, ha='center', fontsize=10)
+    ax.text(0.72, 2.38, 'width', color=LGRAY, ha='center', fontsize=10,
+            rotation=90)
+
+    # Number line and fraction circle cover the arithmetic chapters without
+    # implying any formula not present in the source notes.
+    ax.plot([5.1, 9.2], [1.55, 1.55], color=FG, lw=2)
+    for value in range(-2, 4):
+        xpos = 5.5 + (value + 2) * 0.65
+        ax.plot([xpos, xpos], [1.42, 1.68], color=FG, lw=1.5)
+        ax.text(xpos, 1.12, str(value), color=LGRAY, ha='center', fontsize=9)
+    circle = mpatches.Circle((7.15, 3.15), 0.92, facecolor='#eeeeee',
+                             edgecolor=FG, linewidth=2)
+    wedge = mpatches.Wedge((7.15, 3.15), 0.92, 90, 210,
+                           facecolor=OCRE_HEX, edgecolor=FG, linewidth=1)
+    ax.add_patch(circle)
+    ax.add_patch(wedge)
+    for angle in (90, 210, 330):
+        radians = np.radians(angle)
+        ax.plot([7.15, 7.15 + .92 * np.cos(radians)],
+                [3.15, 3.15 + .92 * np.sin(radians)], color=FG, lw=1)
+    ax.text(5.0, 4.62, chapter_name, color=LGRAY, fontsize=12, ha='center')
+
+
 def generate_chapter_image(chapter_name: str, out_path: Path) -> None:
     """Generate a 1840×920 chapter banner with a thematic scientific diagram."""
     import matplotlib
@@ -893,7 +939,10 @@ def generate_chapter_image(chapter_name: str, out_path: Path) -> None:
     fig, ax = _setup_fig()
     name_l = chapter_name.lower()
 
-    if any(k in name_l for k in ('electric', 'magnetic', 'current', 'circuit', 'heating')):
+    if any(k in name_l for k in ('perimeter', 'area', 'fraction', 'construction',
+                                 'symmetry', 'zero', 'integer')):
+        _draw_mathematics(ax, chapter_name)
+    elif any(k in name_l for k in ('electric', 'magnetic', 'current', 'circuit', 'heating')):
         _draw_electricity(ax)
     elif any(k in name_l for k in ('light', 'mirror', 'lens', 'optic', 'reflect', 'refract')):
         _draw_light(ax)
@@ -969,11 +1018,18 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
             '\\end_inset\n\n'
         )
 
+    def page_break():
+        return ('\\begin_layout Standard\n' +
+                ert('\\backslash\nclearpage') +
+                '\\end_layout\n\n')
+
     for el in elements:
         t = el['type']
 
         if t == 'heading':
             close_enum()
+            if el.get('page_break_before'):
+                lines.append(page_break())
             lvl = el['level']
             layout = {'chapter': 'Chapter', 'section': 'Section',
                       'subsection': 'Subsection',
@@ -1036,6 +1092,21 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
             lines.append(f'\twidth {scale_pct}text%\n')
             lines.append('\\end_inset\n\n')
             lines.append('\\end_layout\n\n')
+
+        elif t == 'infographic':
+            close_enum()
+            fname = el['filename']
+            lines.append('\\begin_layout Standard\n')
+            lines.append('\\align center\n')
+            lines.append('\\begin_inset Graphics\n')
+            lines.append(f'\tfilename media/{fname}\n')
+            lines.append('\twidth 100text%\n')
+            lines.append('\theight 70page%\n')
+            lines.append('\tkeepAspectRatio\n')
+            lines.append('\\end_inset\n\n')
+            lines.append('\\end_layout\n\n')
+            if el.get('page_number', 1) < el.get('page_count', 1):
+                lines.append(page_break())
 
         elif t == 'list':
             close_enum()

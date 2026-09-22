@@ -2,13 +2,20 @@
 
 ## Current objective and branch
 
-- Maintain the reliable Class 6-8 generation and atomic release pipeline while documenting its durable architecture, decisions, known limits, and next steps for future Codex sessions.
-- Branch: main, tracking origin/main. At the start of the documentation task, main, dev, origin/main, and origin/dev all pointed to f7c8117.
-- The user authorized pushing this documentation update to both main and dev on 2026-09-22.
+- Add the Class 6, 7, and 8 Maths source workbook, reference PDFs, and the pipeline support needed to build them, without disturbing the completed Science modules.
+- Branch: dev, updated to fb2ea1f on 2026-09-22; the user authorized pushing the Maths change to both dev and main.
+- Working in the Git clone; the downloaded source folder remains unchanged.
+- User authorized pushing the earlier generator/template fixes to origin/dev on 2026-09-10.
 
 ## Completed work and decisions
 
-- Added docs/CODEX_HANDOFF.md as the detailed cross-session project handoff and updated AGENTS.md to route future sessions to it.
+- Pulled the shared latest `origin/dev` and `origin/main` commit, including `docs/CODEX_HANDOFF.md` and the atomic Science release tooling.
+- Added XLSX chapter-source support with an explicit sheet, strict four-column schema, blank-row handling, chapter validation, and narrow repair of missing `https://` on EduRev links.
+- Added ordered formula/infographic chapter builds. Embedded EduRev infographic PDFs are validated, cached, rendered at 200 DPI, and placed uncropped after the formula section.
+- Added paired reference-directory validation: formula text coverage remains at least 95%, while infographic PDFs require matching page counts and rendered-page similarity.
+- Preserved plain-text equations inside explicit MathML, added the Unicode square-root operator, and normalized browser-print fi/fl control-glyph artifacts without weakening unknown-equation rejection.
+- Added full-page infographic output for TeX and LyX, transparent-image flattening for stable PDF fingerprints, Maths chapter banners, and the school name on both covers.
+- Published `stage2/output/Class6-Maths/` with editable TeX/LyX sources and both compiled PDFs.
 - Added validated URL-keyed page/image caches, bounded retries, atomic cache writes, offline and refresh modes.
 - Added mandatory dependency/compiler preflight, staged builds, TeX and LyX-exported PDF compilation, bounded passes/timeouts, and retained logs.
 - Publication checks source structure, rendered prose, chapter bookmarks, and embedded image fingerprints/order. Previous successful output survives failed builds; successful replacements retain a timestamped snapshot.
@@ -31,11 +38,24 @@
 - Tightened section, subsection, and subsubsection spacing in both output paths and retained `\raggedbottom`.
 - Added `newunicodechar` rupee handling alongside `tfrupee`, preserving literal `₹` while continuing to normalize `Rs.` and `INR`.
 - Added legacy `_sp` JPEG/PNG content-image discovery, sparse-page content-root selection, and filtering for EduRev promotional/course tables without suppressing substantive tables.
+- Added `\rightarrow` to the explicit-equation allowlist after the live Class 7 source used the standard command.
+- Rendered-content validation now keeps adjacent styled prose together, ignores numbered running headings ending in a period, and normalizes combining accents that PDF text extraction separates from their base letters.
+- Rejoins a closing TeX delimiter split across an inline bold boundary in malformed live HTML while retaining explicit equation validation.
+- Reduced the Legrand chapter-banner title size so long Class 8 chapter names remain inside the page.
+- Published complete live-source modules under `stage2/output/Class6-Science/`, `stage2/output/Class7-Science/`, and `stage2/output/Class8-Science/`, each with editable TeX/LyX sources and PDFs from both compiler paths.
 
 ## Tests and results
 
+- Ubuntu Python 3.14 on 2026-09-22: 82 regular tests passed; one integration-marked test was deselected.
+- The real TeX/LyX compiler integration passed: 1 integration test passed, 82 regular tests were deselected. Complex matrix markup is now handled by equation checks instead of being compared as literal rendered prose.
+- Validated all 24 Maths reference PDFs (131 pages total) and the XLSX container. The workbook resolves to Class 6 Chapters 6-10, Class 7 Chapters 9-15, and Class 8 Chapters 8-14.
 - Documentation reconciliation on 2026-09-22: 68 regular tests passed; one integration-marked test was deselected.
-- The real compiler integration was attempted from both the temporary documentation worktree and the canonical checkout. Worktree runs reached LyX but failed with silent exit code 11 and an empty `lyx-export.log`. The canonical-checkout run compiled further but failed closed because TeX PDF validation reported the matrix line `A matrix: \\begin{matrix}1 & 0 \\\\ 0 & 1\\end{matrix}.` as missing. No application code changed in this task; investigate this current compiler/validation regression before treating integration as green.
+- The real compiler integration was attempted from both the temporary documentation worktree and the canonical checkout. Worktree runs reached LyX but failed with silent exit code 11 and an empty `lyx-export.log`. The canonical-checkout run compiled further but failed closed because TeX PDF validation reported the matrix line `A matrix: \begin{matrix}1 & 0 \\ 0 & 1\end{matrix}.` as missing. No application code changed in that task; investigate this current compiler/validation regression before treating integration as green.
+- Ubuntu Python 3.14 on 2026-09-15: 73 regular tests passed; one integration-marked test was deselected.
+- Real TeX/LyX compiler integration passed before the later regression: 1 test passed, 73 deselected.
+- The online and offline Class 6 Maths builds both passed and published transactionally. TeX produced 36 A4 pages; LyX produced 34 A4 pages.
+- Formula reference coverage passed for every chapter and both compiler paths: Chapter 6 100%, Chapter 7 100%, Chapter 8 98.9%, Chapter 9 100% rendered, and Chapter 10 96.8%.
+- Infographic validation passed with page counts 1, 2, 1, 1, and 3 for Chapters 6-10. Every page of both PDFs was reviewed in contact sheets; the final post-cover-change raster comparison was pixel-identical for all unchanged pages.
 - Windows Python 3.12: 44 offline tests passed.
 - Ubuntu WSL Python 3.14: 44 offline tests passed.
 - After live-site parser fixes, Windows Python 3.12: 47 offline tests passed.
@@ -55,12 +75,17 @@
 - The first post-push Linux compiler job reached pytest but failed because sparse checkout omitted the relative `tmp/` parent used by `--basetemp`; the workflow now uses the runner's absolute temporary directory. GitHub actions were also updated to their Node 24 major versions.
 - Windows Python 3.12 on 2026-09-10: 58 regular tests passed; one integration-marked test was deselected.
 - Windows LyX 2.4 / TeX Live 2025 on 2026-09-10: the real compiler integration passed in 67.69 seconds. An initial invocation failed before collection because its temporary parent directory did not exist; rerunning with a valid workspace path passed.
+- Ubuntu Python 3.14 on 2026-09-11: 65 regular tests passed; one integration-marked test was deselected.
+- Ubuntu system pdfLaTeX and LyX successfully compiled all three full modules through both output paths. Class 6 produced 56-page TeX and 49-page LyX PDFs; Class 7 produced 96-page TeX and 82-page LyX PDFs; Class 8 produced 96-page TeX and 83-page LyX PDFs.
+- Structural validation passed for every published module, including all source headings, body runs, lists, ordered image fingerprints, and chapter bookmarks. Every generated page was reviewed in contact sheets, and all final LyX chapter openings were rechecked at higher resolution after the banner adjustment.
 
 ## Known limits and next steps
 
-- Investigate the 2026-09-22 compiler integration failure. Reproduce the matrix rendered-text comparison with the current TeX Live/LyX environment; do not weaken the fail-closed validation rule merely to make the test pass.
-- Class 8 Chapter 9 is published under the ignored `stage2/output/Class8-Ch9-Solutes/` directory with editable TeX/LyX, both PDFs, compiler logs, manifest, and validation reports.
-- Three reference-only lines remain unmatched: one diagram caption and two wrapped practice-link fragments. Coverage remains above the required threshold; the score is diagnostic rather than proof of perfect fidelity.
+- The Class 6 Maths browser-print references contain a few extraction artifacts or stale lines (`Construction of Square` and duplicated accessible equation text). Coverage remains above the required 95%, and exact unmatched lines are retained in `stage2/output/Class6-Maths/report.txt`.
+- The tracked reference PDFs are not uniformly current. Class 6 Chapter 11 contains the Chapter 10 topic and reaches only 9.33% against the live Chapter 11 source; Class 8 Chapter 4 and Class 7 Chapter 6 contain older wording. Several other Class 6 references also predate substantial live rewrites.
+- Reference-checked attempts were retained as diagnostic staging directories and were not published. The final full-class outputs were published from validated URL caches after both compiler and structural/rendered-content checks passed, with optional reference status recorded as `not checked` because the supplied references are stale or incorrect.
+- The LyX cover still contains the template's hard-coded `V.L Memorial Public School` line; no replacement school name was supplied.
+- The earlier standalone Class 8 Chapter 9 output remains under the ignored `stage2/output/Class8-Ch9-Solutes/` directory. Its three reference-only unmatched lines were one diagram caption and two wrapped practice-link fragments; coverage remained above the required threshold.
 - Class 8 Chapter 3 was an earlier calibration run and has not been republished after the newer normalization fixes.
 - Unsupported equations and complex HTML table spans/nesting fail for review. No OCR, formula-image transcription, or inferred equations from prose is performed.
 - HTML question-bank detection and expanded fallback equation extraction are outside this change.
