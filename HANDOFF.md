@@ -6,12 +6,12 @@
 - Preserved question wording/order and subquestion markers; did not infer mark-based categories. Both PDFs compiled and passed structural/rendered-content validation (244 text checks per output); 68 questions and the source graph were checked. Updated practice pages were reviewed.
 - The root Science reference PDF names now follow `Chapter-<N>-Notes-Class<Class>th-Science.pdf`. All 20 renamed files were matched byte-for-byte to the prior tracked PDFs by SHA-256; no contents changed. Untracked ancillary/source PDFs were not added.
 - Added durable question-type heading/numbering instructions to `AGENTS.md` and `CLAUDE.md`; bumped the CLAUDE tag to v4.5.
-- Code changes include MCQ inline math support in both writers, standalone LyX Formula insets, the first-run LyX userdir retry, and regression tests. Tests: 81 passed when excluding xlsx tests; all four xlsx tests fail because `openpyxl` is not installed in the available environment. `git diff --check` passes. Push remains pending until final review.
+- Code changes include MCQ inline math support in both writers, standalone LyX Formula insets, the first-run LyX userdir retry, and regression tests. Tests: 81 passed when excluding xlsx tests; all four xlsx tests fail because `openpyxl` is not installed in the available environment. `git diff --check` passes. Commit `8d74c55` was pushed to `origin/dev` after reviewing the remote, staged diff, and validation results.
 
 ## Current objective and branch
 
 - Add the Class 6, 7, and 8 Maths source workbook, reference PDFs, and the pipeline support needed to build them, without disturbing the completed Science modules.
-- Branch: dev, based on remote commit `1c2ce84`; the user authorized pushing this change to dev only.
+- Branch: dev, published at commit `8d74c55`; the user authorized pushing this change to dev only.
 - Working in the Git clone; the downloaded source folder remains unchanged.
 - User authorized pushing the earlier generator/template fixes to origin/dev on 2026-09-10.
 
