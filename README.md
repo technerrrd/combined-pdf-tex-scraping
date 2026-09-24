@@ -117,8 +117,9 @@ Every run builds in a unique staging directory. Publication requires both PDFs,
 resolved compiler references, source-content and embedded-image checks, and unambiguous chapter
 bookmarks. Failed staging directories retain reports and logs; they are never
 presented as completed modules. Previous successful output is unchanged.
-Successful replacements retain the old module as `<module>.previous-<timestamp>`.
-Review and remove old diagnostics/snapshots manually when no longer needed.
+The previous output is retained only long enough to roll back a failed atomic
+swap, then removed after successful publication. Failed staging directories are
+kept for diagnosis; remove old diagnostics manually when no longer needed.
 
 Compiler reports include overfull boxes of at least 10pt. Missing glyphs and
 oversized floats fail publication; significant overfull boxes are reported as
@@ -161,8 +162,9 @@ repeatable `--reference CLASS=PDF` and matching `--chapter-map CLASS=JSON`
 arguments when a combined reference needs an explicit map.
 
 Publication uses an exclusive lock. If interrupted during publication, inspect
-`.<module>.publish.lock`, the staging directory, and the previous snapshot before
-removing the stale lock or restoring the previous directory.
+`.<module>.publish.lock` and staging directory before removing the stale lock or
+restoring the previous directory. A previous snapshot is not retained after a
+successful publish.
 
 Reference checks compare complete normalized text lines against parsed source
 and both generated PDFs, separately for each chapter. Normalization handles

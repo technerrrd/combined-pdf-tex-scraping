@@ -149,6 +149,8 @@ def test_full_line_coverage_and_boundary():
     lines=[f'Unique statement number {i} ends here' for i in range(20)]
     assert coverage(lines,' '.join(lines[:19]),1,'tex',{})['coverage']==.95
     assert norm('CO₂  ﬁne')==norm('CO2 fine')
+    assert norm(r'Sulphur dioxide is represented by \mathrm{SO_2}.') == norm('Sulphur dioxide is represented by SO2.')
+    assert norm(r'\mathrm{SO_2}') != norm(r'\mathrm{SO_3}')
     with pytest.raises(support.ValidationError): coverage([], '',1,'tex',{})
 
 
@@ -412,6 +414,8 @@ def test_unsupported_and_matrix_mathml():
         assert expected in inline.tex(runs)
     assert norm('a ≤ b') != norm('a ≥ b')
     assert norm(r'a \leq b') == norm('a ≤ b')
+    assert norm(r'A \rightarrow B') == norm('A → B')
+    assert norm(r'A \rightarrow B') != norm('A ← B')
 
 
 def test_mathjax_script_and_literal_escaping():
@@ -489,12 +493,12 @@ def test_image_scale_can_be_overridden_and_is_validated():
     assert arguments([]).image_scale == .75
 
 
-def test_publication_keeps_previous_snapshot(tmp_path):
+def test_publication_replaces_output_without_creating_snapshot(tmp_path):
     destination=tmp_path/'module';destination.mkdir();(destination/'file').write_text('old')
     staged=tmp_path/'staged';staged.mkdir();(staged/'file').write_text('new')
     support.publish(staged,destination)
     assert (destination/'file').read_text()=='new'
-    assert next(tmp_path.glob('module.previous-*')).joinpath('file').read_text()=='old'
+    assert not list(tmp_path.glob('module.previous-*'))
 
 
 def test_duplicate_pdf_markers_and_scanned_reference(tmp_path):

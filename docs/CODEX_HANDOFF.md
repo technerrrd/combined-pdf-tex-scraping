@@ -40,7 +40,7 @@ Important configuration and data:
 
 - Implemented validated URL-keyed page/image caches, bounded retries, atomic cache writes, and explicit offline/refresh modes.
 - Added mandatory Python/compiler preflight, unique staging directories, bounded TeX/LyX compilation, retained logs, and fail-closed publication.
-- Added exclusive publication locks, rollback, and timestamped snapshots of replaced successful output.
+- Added exclusive publication locks and rollback; successful replacements now remove the previous output after the atomic swap instead of accumulating timestamped release folders.
 - Added explicit module/title/link/output/cache/chapter/reference/page-map/coverage/image-scale options while retaining the legacy positional module alias.
 - Replaced guessed reference mapping and prefix matching with explicit or unambiguous page ranges and complete normalized-line comparisons against parsed content and both generated PDFs.
 - Added JSON/text reports and manifests without allowing standalone validation to overwrite build acceptance reports.
@@ -55,6 +55,14 @@ Important configuration and data:
 
 ## Current work
 
+On 2026-09-24, consolidated the newest Class 6 and 7 Science folders into the existing complete Science release at `D:\Science-Book-Releases`, preserving Class 8. Class 6/7 copies were SHA-256 verified. The top-level report now records per-class source provenance because the preserved Class 8 files were built from an older commit. Cleanup of the duplicate `D:\Science-Book-Releases-Classes6-7` folder was attempted after verification but stopped when its `Science_Class6th-lyx.pdf` was locked by another process; the folder is partially present. Ask the user to close that PDF before retrying; do not terminate an unknown process. Earlier failed staging and consolidation backup folders were removed.
+
+Publication now deletes the old-output snapshot after a successful atomic swap, retaining rollback during the swap but preventing per-release sibling folders. README, tests, and handoff docs were updated. Tests could not run in this execution environment: there is no project `.venv`, the bundled Python lacks pytest/PyMuPDF, and no system Python is on PATH. `git diff --check` passed. The previously recorded Class 6/7 and Class 8 build validations remain the available compiler results.
+
+On 2026-09-24, built and published a separate Class 6-7 Science release to `D:\Science-Book-Releases-Classes6-7`, preserving the existing full Class 6-8 release at `D:\Science-Book-Releases`. The workbook-selected chapters are Class 6 Chapters 7-12 and Class 7 Chapters 4-10. No Practice Questions section or question files were added. TeX and LyX source/PDF outputs compiled and passed structural/rendered-source validation; reference PDFs were not checked. Output counts: Class 6, 93 images, 56 TeX pages and 51 LyX pages; Class 7, 151 images, 96 TeX pages and 82 LyX pages. The report records source commit `7e43406122f6a17c3660a3d02755d26ae7b9ee94` and a dirty source tree.
+
+This release exposed two rendered-text normalization gaps. `stage0/validate_against_pdf.py` now normalizes TeX subscripts such as `SO_2` to PDF-extracted `SO2`, and maps `\\rightarrow` to the rendered arrow; `tests/test_pipeline.py` covers both. Windows offline regressions passed (81 passed, 5 deselected), and `git diff --check` passed. The standalone compiler integration fixture remains failing during TeX pass 1 because its generated fixture references an absent `media/5139bcf6230362a2e593b614b26e15e01b72435b82d067f58362907207eea19b.jpg`; this is distinct from the full release, whose real TeX/LyX outputs compiled. Representative pages were reviewed; page-by-page visual review was skipped. No commit or push was made.
+
 The 2026-09-24 update adds explicit question-type headings and restarts top-level numbering at 1 in every type block, including a repeated type after another group. Class 8 Maths Chapter 8 is published under `stage2/output/Class8-Maths/`: MCQs are 1-20, Assertion and Reason 1-9, Problem-Solving 1-25, Case-Based 1-3, repeated Problem-Solving 1-10, and Fill in the Blanks 1. The 68 source questions, order, wording, subquestion markers, and graph were checked against the supplied DOCX/PDF; both TeX and LyX outputs passed compilation and structural/rendered-content validation with 244 source text checks each. No mark categories were inferred where the source lacked mark information.
 
 The same change preserves the Class 6-8 Science reference PDF contents while renaming the 20 tracked files to the consistent `Chapter-<N>-Notes-Class<Class>th-Science.pdf` form. Every renamed pair had identical SHA-256 content before and after. Ancillary files and new worksheet source files were not added.
@@ -67,14 +75,14 @@ Validation for this documentation update found 68 regular tests passing with the
 
 ## Known bugs, limits, and risks
 
-- The 2026-09-22 real compiler integration currently fails as described above. Reproduce the matrix text-extraction/normalization mismatch against the current TeX Live/LyX environment before making pipeline changes.
+- The standalone real compiler integration fixture currently fails in TeX pass 1 because its expected media image is missing; see Current work. Do not weaken fail-closed acceptance. The actual Class 6-7 release compiled successfully through TeX and LyX.
 - Three reference-only Class 8 Chapter 9 lines remain unmatched: one diagram caption and two wrapped practice-link fragments. Coverage remains above the required threshold; the score is diagnostic, not proof of perfect fidelity.
 - Class 8 Chapter 3 was an earlier calibration run and has not been republished after the newest normalization fixes.
 - Unsupported equations and complex HTML table spans/nesting deliberately fail for review. The project does not perform OCR, formula-image transcription, or infer equations from prose.
 - HTML question-bank detection and broader fallback equation extraction remain outside the completed scope.
 - Direct TeX intentionally retains a plain book design while LyX retains the Legrand theme. Theme unification was excluded.
 - Old chapter-number caches are not silently reused. An online build must populate URL-keyed entries before offline use.
-- Failed staging directories, previous snapshots, and stale lock/recovery artifacts may remain after interruption. Inspect them before removal.
+- Failed staging directories and stale lock/recovery artifacts may remain after interruption. Inspect them before removal; successful publication no longer retains old output snapshots.
 - GitHub-hosted CI results must be observed directly; configured or previously passing jobs are not evidence that a new commit passed.
 
 ## Important design decisions

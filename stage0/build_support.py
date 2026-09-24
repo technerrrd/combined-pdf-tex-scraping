@@ -246,7 +246,10 @@ def publish(staging, destination):
             raise
     finally:
         lock.unlink()
-    # Keep the previous successful module as a recoverable snapshot.
+    # The previous output was retained only through the atomic swap so a failed
+    # publish can roll back. Remove it after a successful swap to avoid leaving
+    # a sibling directory for every release.
+    if moved: shutil.rmtree(backup, ignore_errors=True)
 
 
 def write_report(directory, report):

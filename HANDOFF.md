@@ -1,5 +1,20 @@
 # Handoff
 
+## 2026-09-24 one-folder Science release
+
+- Consolidated the newest Class 6 and 7 Science outputs into the existing complete release at `D:\Science-Book-Releases`, preserving its Class 8 output. Class 6/7 files were SHA-256 checked after copying; the root report now identifies source provenance per class because the preserved Class 8 output came from an older commit.
+- Removed the obsolete failed staging exports and consolidation backups. Removal of the duplicate successful folder `D:\Science-Book-Releases-Classes6-7` was blocked because `Science_Class6th-lyx.pdf` is open/locked; its folder remains partially present. Ask the user to close that PDF before retrying cleanup; do not terminate an unknown process.
+- Changed successful atomic publication to delete its temporary previous-output snapshot after the swap, avoiding a new dated sibling folder for every future release while retaining rollback if the swap fails. `README.md` and handoff docs were updated.
+- Tests could not be run in this execution environment: the Git clone has no `.venv`, the bundled Python runtime lacks pytest/PyMuPDF, and no system Python was available. `git diff --check` passed. The prior build report still records the Class 6/7 and Class 8 compiler/structure results.
+
+## 2026-09-24 Class 6-7 Science release (no practice questions)
+
+- Built the two workbook-selected books from validated URL-keyed caches, without adding a Practice Questions section or importing any question-bank files. The atomic subset release is at `D:\Science-Book-Releases-Classes6-7`; the prior complete Class 6-8 release at `D:\Science-Book-Releases` was preserved.
+- Class 6 covers Chapters 7-12 (93 images; 56-page TeX PDF and 51-page LyX PDF). Class 7 covers Chapters 4-10 (151 images; 96-page TeX PDF and 82-page LyX PDF). Both editable sources and all four PDFs compiled; structural and rendered-source validation passed. Reference PDFs were not checked for this release.
+- The release report records source commit `7e43406122f6a17c3660a3d02755d26ae7b9ee94` and `git_dirty: true`. The working diff adds safe PDF-text normalization for TeX subscripts and `\\rightarrow`, with regression tests, because the Class 7 source uses `SO_2` and reaction equations that extract differently from compiled PDFs.
+- Windows offline regression tests: 81 passed, 5 deselected. The separate compiler integration fixture failed during TeX pass 1; the real Class 6/7 books compiled through both TeX and LyX. Representative covers and chapter pages were visually checked; exhaustive page-by-page review was skipped.
+- No commit or push was made for the normalization fix; the current `dev` clone remains dirty. The build used URL-keyed caches and no new workbook or question inputs were modified.
+
 ## 2026-09-24 Class 8 Maths question-type numbering and dev update
 
 - Updated and published `stage2/output/Class8-Maths/` with Chapter 8 questions from the supplied DOCX/PDF pair. Replaced generic Section A-F labels with explicit type headings and independent numbering in every block: MCQ 1-20, Assertion and Reason 1-9, Problem-Solving 1-25, Case-Based 1-3, repeated Problem-Solving 1-10, and Fill in the Blanks 1.
@@ -10,10 +25,10 @@
 
 ## Current objective and branch
 
-- Add the Class 6, 7, and 8 Maths source workbook, reference PDFs, and the pipeline support needed to build them, without disturbing the completed Science modules.
-- Branch: dev, published at commit `8d74c55`; the user authorized pushing this change to dev only.
+- Publish the Class 6 and 7 Science books from `Science-notes-links.xlsx` without adding practice questions. Preserve the existing complete Class 6-8 release and keep generated releases outside the checkout.
+- Branch: dev, based on `7e43406`; the current uncommitted validation-normalization change is recorded in the Class 6-7 release report as dirty.
 - Working in the Git clone; the downloaded source folder remains unchanged.
-- User authorized pushing the earlier generator/template fixes to origin/dev on 2026-09-10.
+- No commit or push is authorized for the current normalization change.
 
 ## Completed work and decisions
 
@@ -26,7 +41,7 @@
 - Published `stage2/output/Class6-Maths/` with editable TeX/LyX sources and both compiled PDFs.
 - Added validated URL-keyed page/image caches, bounded retries, atomic cache writes, offline and refresh modes.
 - Added mandatory dependency/compiler preflight, staged builds, TeX and LyX-exported PDF compilation, bounded passes/timeouts, and retained logs.
-- Publication checks source structure, rendered prose, chapter bookmarks, and embedded image fingerprints/order. Previous successful output survives failed builds; successful replacements retain a timestamped snapshot.
+- Publication checks source structure, rendered prose, chapter bookmarks, and embedded image fingerprints/order. Previous successful output survives failed builds; after a successful atomic swap, the previous output is removed rather than retained as a dated folder.
 - Added exclusive publication locks and rollback for failed directory replacement.
 - Added explicit module/title/input/output/cache/chapter selection flags and reference validation options; retained positional module alias.
 - Replaced positional reference mapping and prefix matching with explicit/unambiguous chapter ranges and complete normalized-line comparisons against parsed content and both PDFs.
@@ -99,7 +114,7 @@
 - HTML question-bank detection and expanded fallback equation extraction are outside this change.
 - Direct TeX retains a plain book design while LyX retains the Legrand theme; theme unification was excluded.
 - Old chapter-number HTML caches are not silently reused; populate URL-keyed caches with an online build before offline operation.
-- Diagnostic staging directories and previous snapshots are retained. Inspect stale publication locks and recovery directories after an interrupted publication; do not delete them blindly.
+- Failed diagnostic staging directories are retained. Successful replacements no longer retain prior output snapshots. Inspect stale publication locks and recovery directories after an interrupted publication; do not delete them blindly.
 - See README.md for commands and explicit chapter-map JSON. Final local fixture outputs and diagnostics are under ignored tmp/ directories.
 - GitHub authentication and repository push permission were verified; the user explicitly authorized this dev-branch push.
 

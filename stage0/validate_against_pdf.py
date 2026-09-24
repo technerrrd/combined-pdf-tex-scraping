@@ -15,7 +15,7 @@ ARTIFACT = re.compile(
     r'edurev|durev|^edur$|^urev$|table of contents|^chapter notes\s*:|chapter notes\s*\|\s*science class|'
     r'^\d+\s*(?:of|/)\s*\d+$|^of\s+\d+$|^\d{2}/\d{2}/\d{2}|^https?://|^Firefox$|'
     r'^view (solution|more)|multiple choice question|^try yourself:|short-answer-questions-.*/', re.I)
-NORMALIZATION = 'NFKD; ligatures; lowercase; combining-mark and punctuation removal; whitespace/line-wrap joins; discretionary hyphens; equivalent math symbols; list markers and standalone bold section numbers. Full normalized lines, never prefixes.'
+NORMALIZATION = 'NFKD; ligatures; lowercase; combining-mark and punctuation removal; whitespace/line-wrap joins; discretionary hyphens; equivalent math symbols and subscript markers; list markers and standalone bold section numbers. Full normalized lines, never prefixes.'
 
 
 def norm(text):
@@ -28,10 +28,14 @@ def norm(text):
     text = text.replace('◦', '°')
     text = re.sub(r'--+|[–—]', '', text)
     text = re.sub(r'(\w)-\s*\n\s*(\w)', r'\1\2', text)
+    text = re.sub(r'\\rightarrow\b', '→', text)
     for symbol, macro in sorted(inline.SYMBOLS.items(), key=lambda pair: -len(pair[1])):
         text = re.sub(re.escape(macro.lower()) + r'(?![a-z])', lambda _: symbol.lower(), text)
     text = re.sub(r'\\(?:frac|dfrac|tfrac|sqrt|text|mathrm|mathbf|mathit|left|right)\b', '', text)
     text = re.sub(r'\\(?:begin|end)\{[^}]+\}', '', text)
+    # PDF text extraction omits TeX's subscript marker while retaining its
+    # contents (for example, SO_2 is extracted as SO2).
+    text = re.sub(r'(?<=\w)_(?=\w)', '', text)
     # Preserve operator identity: opposite inequalities/arrows are not equivalent.
     operators = {'→':' to ', '⟶':' to ', '←':' leftarrow ', '↔':' leftrightarrow ', '⇌':' rightleftharpoons ', '×':' times ', '÷':' div ', '±':' pm ', '≈':' approx ', '≤':' leq ', '≥':' geq ', '≠':' neq ', '∞':' infty ', '∴':' therefore ', '°':'', '·':' cdot ', '=':' equals ', '+':' plus ', '−':' minus '}
     for symbol, word in operators.items(): text = text.replace(symbol, word)
