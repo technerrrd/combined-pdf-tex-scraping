@@ -375,13 +375,19 @@ def write_tex(elements, out_path: Path, media_dir: Path):
 
         elif t == 'body':
             close_enum()
+            if el.get('page_break_before'):
+                lines.append('\\clearpage\n')
             rendered = render_tex_segments(el['segments'])
             lines.append(f'\\par {rendered}\n\n')
 
         elif t == 'mcq':
             open_enum()
             q = tex_escape(el['text'])
+            if 'question_segments' in el:
+                q = render_tex_segments(el['question_segments'])
             opts = [tex_escape(o) for o in el['options']]
+            if 'option_segments' in el:
+                opts = [render_tex_segments(o) for o in el['option_segments']]
             lines.append(f'\\item \\textbf{{{q}}}\\\\[0.13cm]\n')
             lines.append(r'\begin{tabular}{@{}p{0.45\textwidth} p{0.45\textwidth}@{}}' + '\n')
             lines.append(f'$\\square$ A) {opts[0]} & $\\square$ B) {opts[1]} \\\\\n')
@@ -514,10 +520,10 @@ LYX_HEADER = """\
 \\topmargin 2.5cm
 \\rightmargin 2.5cm
 \\bottommargin 2.5cm
-\\secnumdepth 3
-\\tocdepth 3
+\\secnumdepth 2
+\\tocdepth 1
 \\paragraph_separation indent
-\\paragraph_indentation default
+\\paragraph_indentation 0bp
 \\is_math_indent 0
 \\math_numbering_side default
 \\quotes_style english
@@ -1018,6 +1024,11 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
             '\\end_inset\n\n'
         )
 
+    def ert_tex(segments) -> str:
+        """Encode TeX generated from rich MCQ runs inside a LyX ERT inset."""
+        rendered = render_tex_segments(segments).replace('₹', r'\rupee~').replace('\u2006', ' ')
+        return rendered.replace('\\', '\\backslash\n')
+
     def page_break():
         return ('\\begin_layout Standard\n' +
                 ert('\\backslash\nclearpage') +
@@ -1056,6 +1067,8 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
 
         elif t == 'body':
             close_enum()
+            if el.get('page_break_before'):
+                lines.append(page_break())
             lines.append('\\begin_layout Standard\n')
             lines.append(render_lyx_segments(el['segments']))
             lines.append('\n\\end_layout\n\n')
@@ -1064,6 +1077,15 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
             in_enum = True
             q = el['text']
             opts = el['options']
+            if 'question_segments' in el:
+                q = ert_tex(el['question_segments'])
+            else:
+                q = tex_escape(q).replace('₹', r'\rupee~').replace('\u2006', ' ')
+                q = q.replace('\\', '\\backslash\n')
+            if 'option_segments' in el:
+                opts = [ert_tex(o) for o in el['option_segments']]
+            else:
+                opts = [tex_escape(o).replace('₹', r'\rupee~').replace('\u2006', ' ').replace('\\', '\\backslash\n') for o in opts]
             lines.append('\\begin_layout Enumerate\n')
             q_ert = (
                 f'\\backslash\ntextbf{{{q}}}\\backslash\n\\backslash\n[0.13cm]\n'

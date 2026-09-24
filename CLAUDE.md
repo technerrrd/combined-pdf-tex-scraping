@@ -1,4 +1,4 @@
-# CLAUDE.md <!-- version: v4.4 -->
+# CLAUDE.md <!-- version: v4.5 -->
 
 ## Maintenance Rule
 
@@ -320,7 +320,10 @@ Bold label:
 
 Enumerate blocks apply only when the document is a question bank (MCQ, short/long Q&A). In that case:
 - **Strip all original numbering** — remove `Q1`, `2.`, `1.1`, `(a)`, etc.
-- **Under every subsection**, open a fresh `enumerate` block immediately after the heading
+- **Add an explicit heading for each question type** and start that type's top-level numbering at 1
+- If a type appears again after another type, repeat its heading and restart numbering at 1 for that block
+- Preserve source subquestion markers/order; do not infer mark-based categories when marks are absent
+- **Under every question-type heading**, open a fresh `enumerate` block immediately after the heading
 - **Before the next subsection or section**, close the `enumerate` block
 
 MCQ questions always use enumerate regardless of document type.

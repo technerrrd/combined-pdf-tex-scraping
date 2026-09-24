@@ -279,6 +279,51 @@ def test_infographic_writers_use_one_page_uncropped_layout(tmp_path):
     assert '\theight 70page%\n\tkeepAspectRatio' in lyx
 
 
+def test_body_page_break_is_rendered_by_both_writers(tmp_path):
+    import convert
+    media = tmp_path / 'media'
+    media.mkdir()
+    elements = [
+        dict(type='body', segments=[('Case Study 2', True)], page_break_before=True),
+    ]
+    tex_path = tmp_path / 'book.tex'
+    lyx_path = tmp_path / 'book.lyx'
+    convert.write_tex(elements, tex_path, media)
+    convert.write_lyx(elements, lyx_path, media)
+    tex = tex_path.read_text()
+    lyx = lyx_path.read_text()
+    assert tex.index('\\clearpage') < tex.index('Case Study 2')
+    assert lyx.index('clearpage') < lyx.index('Case Study 2')
+
+
+def test_mcq_writers_preserve_math_in_prompt_and_options(tmp_path):
+    import convert
+    media = tmp_path / 'media'
+    media.mkdir()
+    elements = [dict(
+        type='mcq', text='ignored', options=['ignored'] * 4,
+        question_segments=[inline.run('Which fraction equals ', kind='text'),
+                           inline.run(r'\frac{3}{5}', kind='math')],
+        option_segments=[[inline.run(r'\frac{3}{5}', kind='math')],
+                         [inline.run('50%', kind='text')],
+                         [inline.run('75%', kind='text')],
+                         [inline.run('60%', kind='text')]],
+    ), dict(type='body', segments=[inline.run('Question text '),
+                                    inline.run(r'\frac{3}{5}', kind='math'),
+                                    inline.run(' continues after the fraction.')])]
+    tex_path = tmp_path / 'book.tex'
+    lyx_path = tmp_path / 'book.lyx'
+    convert.write_tex(elements, tex_path, media)
+    convert.write_lyx(elements, lyx_path, media)
+    tex = tex_path.read_text()
+    lyx = lyx_path.read_text()
+    assert r'Which fraction equals $\frac{3}{5}$' in tex
+    assert r'A) $\frac{3}{5}$' in tex
+    assert r'Question text ' + '\n' + r'\begin_inset Formula $\frac{3}{5}$' in lyx
+    assert r'\backslash' + '\nfrac{3}{5}' in lyx
+    assert r'\backslash' + '\n%' in lyx
+
+
 def test_publication_rollback(tmp_path,monkeypatch):
     old=tmp_path/'module'; old.mkdir(); (old/'good').write_text('old')
     staged=tmp_path/'staged'; staged.mkdir()
@@ -295,6 +340,37 @@ def test_compiler_timeout_retains_diagnostics(tmp_path,monkeypatch):
     monkeypatch.setattr(support.subprocess,'run',Mock(side_effect=subprocess.TimeoutExpired('compiler',1,output=b'partial')))
     with pytest.raises(support.BuildError,match='timed out'): support.command(['compiler'],tmp_path,tmp_path/'compiler.log',timeout=1)
     assert b'partial' in (tmp_path/'compiler.log').read_bytes()
+
+
+def test_compile_documents_uses_lyx_export_switch(tmp_path, monkeypatch):
+    seen = []
+
+    def fake_command(args, directory, log, timeout=180, environment=None):
+        seen.append(list(args))
+        if args[0] == 'lyx':
+            if len([item for item in seen if item[0] == 'lyx']) == 1:
+                userdir = Path(args[args.index('-userdir') + 1])
+                userdir.mkdir(parents=True, exist_ok=True)
+                (userdir / 'lyxrc.defaults').write_text('configured')
+                raise support.BuildError('first-run configuration')
+            assert '-E' in args
+            assert '-e' not in args
+            (directory / args[-2]).write_text('\\documentclass{book}\\begin{document}\\end{document}')
+            return ''
+        job = next(arg.split('=', 1)[1] for arg in args if arg.startswith('-jobname='))
+        (directory / f'{job}.log').write_text('')
+        import pymupdf
+        pdf = pymupdf.open()
+        pdf.new_page()
+        pdf.save(directory / f'{job}.pdf')
+        pdf.close()
+        return ''
+
+    monkeypatch.setattr(support, 'command', fake_command)
+    outputs = support.compile_documents(tmp_path, 'book', {'lyx': 'lyx', 'pdflatex': 'pdflatex'})
+    assert seen[0][seen[0].index('-batch') + 1:seen[0].index('-batch') + 3] == ['-E', 'pdflatex']
+    assert len([item for item in seen if item[0] == 'lyx']) == 2
+    assert set(outputs) == {'tex', 'lyx'}
 
 
 def test_compiler_missing_is_not_skipped(monkeypatch):
@@ -525,6 +601,9 @@ def test_notes_exclude_optional_fact_callouts_and_all_quiz_variants():
 
 def test_typographic_dashes_match_tex_punctuation():
     assert norm('Health—not just disease')==norm('Health---not just disease')
+    assert norm('books-almost') == norm('books-\nalmost')
+    assert norm('well-being') == norm('well being')
+    assert norm('12-4') != norm('12-5')
     assert norm('20 °C') == norm('20 ◦C')
     assert norm('Water boils at 100 °C') == norm('Water boils at 100 C')
     assert norm(r'Water boils at 100 \circ C') == norm('Water boils at 100 °C')

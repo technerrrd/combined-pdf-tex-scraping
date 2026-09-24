@@ -6,23 +6,28 @@ SYMBOLS = dict(zip('αβγδεζηθικλμνξπρστυφχψωΓΔΘΛΞΠΣ
     ['\\'+s for s in 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi pi rho sigma tau upsilon phi chi psi omega Gamma Delta Theta Lambda Xi Pi Sigma Phi Psi Omega'.split()]))
 SYMBOLS.update(dict(zip('→←↔⇌⟶×÷±≈≤≥≠∞∴°·√',
     ['\\'+s for s in 'to leftarrow leftrightarrow rightleftharpoons longrightarrow times div pm approx leq geq neq infty therefore circ cdot surd'.split()])))
+SYMBOLS.update({'∆': r'\Delta', '△': r'\triangle', '≅': r'\cong', '∠': r'\angle'})
 COMMANDS = set('frac dfrac tfrac sqrt text mathrm mathbf mathit mathcal mathbb operatorname left right overline underline hat widehat bar vec dot ddot tilde widetilde sin cos tan log ln exp lim sum prod int iint partial nabla cdots ldots vdots ddots quad qquad space begin end cases matrix pmatrix bmatrix vmatrix aligned array displaystyle textstyle limits nonumber'.split()) | {v[1:] for v in SYMBOLS.values()}
-COMMANDS |= set('epsilon varepsilon vartheta varphi varrho varsigma omega degree angle perp parallel cup cap subset subseteq in notin forall exists emptyset lbrace rbrace langle rangle vert Vert'.split())
+COMMANDS |= set('epsilon varepsilon vartheta varphi varrho varsigma omega degree angle triangle perp parallel cup cap subset subseteq in notin forall exists emptyset lbrace rbrace langle rangle vert Vert le ne Delta cong'.split())
 COMMANDS |= set('rightarrow longleftarrow longleftrightarrow Rightarrow Leftarrow Leftrightarrow'.split())
 ENVIRONMENTS = {'matrix', 'pmatrix', 'bmatrix', 'vmatrix', 'cases', 'aligned'}
 
 
 def check_math(value):
     if not value.strip(): raise ValueError('Empty explicit equation')
+    superscripts = '⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾'
+    subscripts = '₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎'
+    value = re.sub(f'[{superscripts}]+', lambda m: '^{' + unicodedata.normalize('NFKC', m.group()) + '}', value)
+    value = re.sub(f'[{subscripts}]+', lambda m: '_{' + unicodedata.normalize('NFKC', m.group()) + '}', value)
     for symbol, command in SYMBOLS.items():
         value = value.replace(symbol, command + ' ')
-    if '%' in value or '#' in value or '$' in value:
+    if re.search(r'(?<!\\)(?:\\\\)*[%#$]', value):
         raise ValueError('Unsupported math character (%, # or $); review expression')
     depth = 0
     for token in re.findall(r'\\[A-Za-z]+|\\.|[{}]', value):
         if token.startswith('\\'):
             name = token[1:]
-            if name not in COMMANDS and name not in '{}_,;:! |\\':
+            if name not in COMMANDS and name not in '{}_,;:! |\\%#$':
                 raise ValueError(f'Unsupported LaTeX command: {token}')
         elif token == '{':
             depth += 1
@@ -117,7 +122,9 @@ def lyx(segments):
         kind, value = s['kind'], s['text']
         if kind == 'math':
             delim = '$$' if s.get('display') else '$'
-            parts.append('\\begin_inset Formula ' + delim + check_math(value) + delim + '\n\\end_inset\n')
+            # LyX 2.4 requires an inline Formula inset to begin on its own
+            # source line when it follows ordinary text in the same layout.
+            parts.append('\n\\begin_inset Formula ' + delim + check_math(value) + delim + '\n\\end_inset\n')
         elif kind in ('sub', 'sup'):
             parts.append('\\begin_inset script ' + ('subscript' if kind == 'sub' else 'superscript') + '\n\\begin_layout Plain Layout\n' + value.replace('\\', '\\backslash\n') + '\n\\end_layout\n\\end_inset\n')
         else:

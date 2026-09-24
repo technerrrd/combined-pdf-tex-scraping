@@ -55,9 +55,13 @@ Important configuration and data:
 
 ## Current work
 
-The current task is documentation-only: establish concise durable instructions in `AGENTS.md`, preserve operational history in `HANDOFF.md`, and add this detailed project context for Codex Cloud and sessions on other computers. No application behavior is intentionally changing.
+The 2026-09-24 update adds explicit question-type headings and restarts top-level numbering at 1 in every type block, including a repeated type after another group. Class 8 Maths Chapter 8 is published under `stage2/output/Class8-Maths/`: MCQs are 1-20, Assertion and Reason 1-9, Problem-Solving 1-25, Case-Based 1-3, repeated Problem-Solving 1-10, and Fill in the Blanks 1. The 68 source questions, order, wording, subquestion markers, and graph were checked against the supplied DOCX/PDF; both TeX and LyX outputs passed compilation and structural/rendered-content validation with 244 source text checks each. No mark categories were inferred where the source lacked mark information.
 
-The most recent implementation milestone is commit `f7c8117` (`feat: add atomic science releases`). At the start of this task, local and remote `main` and `dev` all referenced that commit.
+The same change preserves the Class 6-8 Science reference PDF contents while renaming the 20 tracked files to the consistent `Chapter-<N>-Notes-Class<Class>th-Science.pdf` form. Every renamed pair had identical SHA-256 content before and after. Ancillary files and new worksheet source files were not added.
+
+The code changes support editable inline math in MCQ prompts/options for TeX/LyX, keep LyX Formula insets on their own source lines, and retry a LyX batch export only when a fresh user directory created its first-run configuration but no export. Regression tests cover these cases.
+
+This dev update was prepared from remote commit `1c2ce84` (`feat: add class 6-8 maths sources`). Verify the final commit and push status from Git history rather than relying on this handoff text alone.
 
 Validation for this documentation update found 68 regular tests passing with the integration-marked test deselected. The real compiler integration is not currently green: temporary-worktree runs ended at LyX export with silent exit code 11, while a run from the canonical checkout compiled further and then failed closed because TeX PDF validation could not match the fixture's rendered matrix line. This task did not change application code; treat this as a current compiler/validation issue to investigate, not as a reason to weaken acceptance checks.
 

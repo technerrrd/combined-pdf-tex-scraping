@@ -182,8 +182,20 @@ def compile_documents(directory, module, programs, diagnostics=None):
         # Export LyX to its own TeX file, then compile with the same bounded pipeline.
         # This preserves both sources and gives full control over passes/log checks.
         exported = module + '-lyx.tex'
-        command([programs['lyx'], '-batch', '-E', 'pdflatex', exported, module + '.lyx'], directory,
-                directory / 'lyx-export.log', environment=environment)
+        lyx_userdir = directory / 'lyx-userdir'
+        lyx_userdir.mkdir(parents=True, exist_ok=True)
+        export_command = [programs['lyx'], '-userdir', str(lyx_userdir), '-n', '-batch',
+                          '-E', 'pdflatex', exported, module + '.lyx']
+        try:
+            command(export_command, directory, directory / 'lyx-export.log', environment=environment)
+        except BuildError:
+            # A fresh LyX userdir is configured on first invocation. On Windows
+            # LyX can return 1 after writing its configuration without exporting;
+            # retry only when that first-run configuration was actually created.
+            if not (lyx_userdir / 'lyxrc.defaults').is_file():
+                raise
+            command(export_command, directory, directory / 'lyx-export.log', environment=environment)
+        shutil.rmtree(lyx_userdir, ignore_errors=True)
         if not (directory / exported).exists(): raise BuildError('LyX did not export TeX')
         # LyX sometimes emits absolute PNG paths; keep only paths within this build portable.
         export_path = directory / exported

@@ -22,6 +22,7 @@
   order and keep each chapter's formula content before its infographic pages.
 - Preserve html5lib parsing, inline spacing, source image order, and the LyX template.
 - Do not invent missing source content or transcribe formulas from images; see CLAUDE.md for detailed exceptions and formatting rules.
+- In question banks, add clear question-type headings and restart top-level numbering at 1 in every question-type block. If a type reappears after another type, repeat its heading and restart that block at 1; preserve subquestion labels, source order, and wording. Use only source-defined or clearly supported types, not guessed mark categories.
 
 ## Handoff maintenance
 
