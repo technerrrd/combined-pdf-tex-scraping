@@ -1,5 +1,34 @@
 # Codex project handoff
 
+## 2026-10-10 Class 8 Maths source publication and build
+
+- User authorized pushing the current rules and all seven chapter question DOCX/PDF pairs before completing the Class 8 Maths book. Publishing to both `origin/main` and `origin/dev` by fast-forward; no force push.
+- All 14 source files opened successfully (61 PDF pages); copied files match SHA-256, including the existing Chapter 8 filename with a space before `.pdf`. Word lock files and unrelated files are excluded. Content comparison and chapter/type audits are still pending for the build.
+- Rules are in `CLAUDE.md` v4.7 and `AGENTS.md`; retained the clone's newer release history while importing the rule updates. Staged diff and whitespace checks reviewed. No code changes or new compiler/test results in this source publication.
+- Page-by-page visual inspection was declined for this release. Mandatory compilation, structural, rendered-content, equation, and image checks still apply. Build is pending; preserve existing output on failure.
+
+## 2026-10-10 Additional approved question-source rules
+
+The user approved all four suggested additions. `AGENTS.md` and `CLAUDE.md` (v4.7) now require reporting duplicate questions, missing options, incomplete statements, and conflicting DOCX/PDF wording without silently correcting, deleting, deduplicating, or selecting conflicting content. Verify each question file's chapter using source identifiers and the authoritative chapter map before insertion, flagging ambiguous or mismatched placement.
+
+For each chapter, record question counts by type, including repeated type blocks, and verify every supplied question, option, answer, table, and figure in both compiled outputs with source content and order preserved. Counts alone do not prove completeness; missing or mismatched content must be reported before publication.
+
+Assertion-reason options supplied once as common section instructions may be repeated exactly beneath each pair covered by that section, using the two-column checkbox grid. This exception permits repetition of supplied content only; options must never be generated or imported from an assumed standard list. Unclear applicability requires review.
+
+This remains a documentation-only preparation step for Class 8 chapter questions; parser/writer behavior and existing books have not changed. The active Windows export has no `.git`; the existing clone at `tmp/codex-push-dev-20260924/` remains clean on `dev`, one commit ahead of cached `origin/dev`, without a remote refresh. Four-document diff review, rule-consistency searches, and whitespace checks were performed on Windows; no tests, conversions, builds, commits, pushes, or Linux checks were run. Pre-edit copies are under `tmp/question-rules-followup-before-20261010/`. Next, inspect source files for chapter mappings, counts, and issues before conversion; automatic question ingestion remains incomplete.
+
+## 2026-10-10 Current question-formatting decisions
+
+The current objective is to document the user's question rules before processing the newly supplied Class 8 chapter files. This update changes documentation only. The active Windows workspace has no `.git`; the existing clone at `tmp/codex-push-dev-20260924/` is on `dev`, with a clean working tree and one commit ahead of its cached `origin/dev`. No remote refresh, commit, or push was performed.
+
+- **Source-only content:** use only supplied questions, answers, solutions, explanations, and options. Never generate, infer, complete, or rewrite them. Flag missing or unclear content for review; preserve supplied content even when familiar standard wording exists.
+- **Assertion-reason layout:** use the MCQ two-column checkbox grid in both TeX and LyX, with A/B on the first row and C/D on the second. Preserve source option wording and order. The former fixed-option requirement in `CLAUDE.md` is removed; example placeholders refer only to supplied content. Missing options must not be supplied from the former fixed list. This decision supersedes the stacked options in the earlier Science build; existing outputs have not been regenerated.
+- **Numbering:** start top-level numbering at 1 in every question-type block, repeating the heading and restarting at 1 if a type reappears. Preserve source subquestion and alternative labels and their order. This overrides the former blanket instruction to strip every numbering prefix.
+
+`AGENTS.md` and `CLAUDE.md` (v4.6) carry the durable rules. The converter's automatic coverage of question types and chapter-file ingestion remains incomplete; this documentation update adds no parser or writer behavior. Inspect and map the supplied files before the next conversion, and flag missing options or unclear content rather than manufacture replacements.
+
+Validation for this update consists of four-document diff review, conflicting-instruction searches, and whitespace checks. No application tests, TeX/LyX builds, or Linux checks were run. Pre-edit copies are retained under `tmp/question-rules-before-20261010/`.
+
 ## Project purpose and goals
 
 This repository turns ordered EduRev science-note chapter links into editable TeX and themed LyX books, compiles both formats to PDF, validates source structure and optional reference coverage, and publishes output only after every required check passes. It also retains a PDF/DOCX fallback for pages that cannot be scraped.

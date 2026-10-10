@@ -1,5 +1,33 @@
 # Handoff
 
+## 2026-10-10 Class 8 Maths source publication and build
+
+- User authorized pushing the current rules and all seven chapter question DOCX/PDF pairs before completing the Class 8 Maths book. Publishing to both `origin/main` and `origin/dev` by fast-forward; no force push.
+- All 14 source files opened successfully (61 PDF pages); copied files match SHA-256, including the existing Chapter 8 filename with a space before `.pdf`. Word lock files and unrelated files are excluded. Content comparison and chapter/type audits are still pending for the build.
+- Rules are in `CLAUDE.md` v4.7 and `AGENTS.md`; retained the clone's newer release history while importing the rule updates. Staged diff and whitespace checks reviewed. No code changes or new compiler/test results in this source publication.
+- Page-by-page visual inspection was declined for this release. Mandatory compilation, structural, rendered-content, equation, and image checks still apply. Build is pending; preserve existing output on failure.
+
+## 2026-10-10 Additional question-source checks
+
+- User approved all suggested additions. Updated `AGENTS.md`, `CLAUDE.md` (v4.7), and `docs/CODEX_HANDOFF.md` with source-problem reporting, verified chapter placement, and per-chapter completeness checks.
+- Report duplicate questions, missing options, incomplete statements, and DOCX/PDF wording conflicts without silently correcting, deleting, or choosing conflicting content. Verify source chapter identifiers against the authoritative chapter map before insertion; flag ambiguities.
+- Record question counts by type for every chapter and verify each supplied question, option, answer, table, and figure in both compiled outputs; counts alone are insufficient.
+- Exact assertion-reason options supplied once as common section instructions may be repeated beneath every pair in their stated scope. Missing options still must not be generated; unclear scope requires review.
+- Objective remains documentation preparation for Class 8 question processing. Active export has no `.git`; the existing clone at `tmp/codex-push-dev-20260924/` remains clean on `dev`, one commit ahead of cached `origin/dev`. No remote refresh performed.
+- Validation: reviewed the four-document diff, rule consistency, and whitespace checks on Windows. No tests, conversions, builds, commits, pushes, or Linux checks run. Pre-edit copies are under `tmp/question-rules-followup-before-20261010/`.
+- Next step: inspect the supplied chapter files and report mappings, counts, and source issues before conversion. Automatic question ingestion remains incomplete; no application code or generated books changed.
+
+## 2026-10-10 Question-formatting rules update
+
+- Objective: document the user's rules before processing the newly supplied Class 8 chapter questions. Documentation only; no conversion, build, commit, or push.
+- Active workspace is a legacy export without `.git`. The existing clone at `tmp/codex-push-dev-20260924/` is on `dev`, clean, with one local commit ahead of its cached `origin/dev`; no remote refresh was run for this update.
+- Updated `AGENTS.md` and `CLAUDE.md` (v4.6): use only supplied questions, answers, solutions, explanations, and options. Never generate, infer, complete, or rewrite them; flag missing or unclear content.
+- Assertion-reason options must use the MCQ two-column checkbox grid (A/B first row, C/D second), preserving source wording and order. Removed the fixed-option insertion requirement and replaced the examples with source-content placeholders. This supersedes the stacked assertion-reason layout recorded for the 2026-09-23 Science build.
+- Top-level numbering restarts at 1 for every question-type block, including repeated types. Source subquestion and alternative labels are preserved; the older blanket numbering-strip instruction has been narrowed.
+- Validation: reviewed the four-document diff and checked for conflicting fixed-option/numbering instructions and whitespace errors. No application tests or compilers run because only documentation changed.
+- Next step: inspect and map the supplied chapter question files before conversion; missing options/content require review. These rules do not add automatic question ingestion or change existing generated books.
+- Platform: edits and checks performed on Windows; no Linux validation run. Pre-edit copies retained under `tmp/question-rules-before-20261010/`.
+
 ## 2026-09-24 one-folder Science release
 
 - Consolidated the newest Class 6 and 7 Science outputs into the existing complete release at `D:\Science-Book-Releases`, preserving its Class 8 output. Class 6/7 files were SHA-256 checked after copying; the root report now identifies source provenance per class because the preserved Class 8 output came from an older commit.

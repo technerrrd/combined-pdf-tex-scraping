@@ -22,6 +22,12 @@
   order and keep each chapter's formula content before its infographic pages.
 - Preserve html5lib parsing, inline spacing, source image order, and the LyX template.
 - Do not invent missing source content or transcribe formulas from images; see CLAUDE.md for detailed exceptions and formatting rules.
+- Use only supplied questions, answers, solutions, explanations, and options. Never generate, infer, complete, or rewrite them; flag missing or unclear content rather than supply replacements.
+- Format supplied assertion-reason options in the same two-column checkbox grid as MCQs: A/B on the first row, C/D on the second. Preserve source option wording and order; never insert fixed or missing options.
+- If assertion-reason options are supplied once as common instructions for a section, repeat those exact options beneath each pair in that section's scope; flag unclear scope instead of assuming applicability.
+- Report duplicate questions, missing options, incomplete statements, and conflicting DOCX/PDF wording; do not silently correct or delete source content or choose between conflicting sources.
+- Verify each question file's chapter from source identifiers and the authoritative chapter map before insertion; flag ambiguous or mismatched placement.
+- Record question counts by type for every chapter and verify every supplied question, option, answer, table, and figure appears in both compiled outputs; counts alone do not establish completeness.
 - In question banks, add clear question-type headings and restart top-level numbering at 1 in every question-type block. If a type reappears after another type, repeat its heading and restart that block at 1; preserve subquestion labels, source order, and wording. Use only source-defined or clearly supported types, not guessed mark categories.
 
 ## Handoff maintenance

@@ -1,4 +1,4 @@
-# CLAUDE.md <!-- version: v4.5 -->
+# CLAUDE.md <!-- version: v4.7 -->
 
 ## Maintenance Rule
 
@@ -253,6 +253,8 @@ Your sole job is to faithfully convert the content of the input DOCX into LaTeX/
 - Fill in missing content or "improve" phrasing
 - Generate section summaries, captions, or explanations
 
+**Strict source-only question content:** Use only supplied questions, answers, solutions, explanations, and options. Never generate, infer, complete, or rewrite them, including assertion-reason options. Formatting headings and numbering may change as specified below; source wording and content must remain intact.
+
 If something is unclear or missing in the source, flag it — do not invent a replacement.
 
 ### Subject Detection
@@ -290,7 +292,7 @@ Pandoc is not used — it cannot reconstruct heading hierarchy because all parag
 
 ## Numbering Rules
 
-**Strip all original numbering prefixes** from heading and body text. Patterns stripped: `1.`, `1.1`, `1.6.9`, `Q1`, `Q1.`, `(a)`, `(i)`, `(1)`. LyX and LaTeX provide their own auto-numbering.
+**Replace only numbering prefixes that LyX and LaTeX regenerate**, such as heading counters and top-level question numbers (`Q1`, `1.`, etc.). In question banks, preserve source subquestion labels such as `(a)`, `(i)`, and `(1)`, their order, and alternative labels; do not strip or renumber them.
 
 ### Notes documents (default)
 
@@ -319,7 +321,7 @@ Bold label:
 ### Question bank documents
 
 Enumerate blocks apply only when the document is a question bank (MCQ, short/long Q&A). In that case:
-- **Strip all original numbering** — remove `Q1`, `2.`, `1.1`, `(a)`, etc.
+- **Replace only top-level question numbering** with automatic numbering; preserve source subquestion labels and alternatives
 - **Add an explicit heading for each question type** and start that type's top-level numbering at 1
 - If a type appears again after another type, repeat its heading and restart numbering at 1 for that block
 - Preserve source subquestion markers/order; do not infer mark-based categories when marks are absent
@@ -327,6 +329,12 @@ Enumerate blocks apply only when the document is a question bank (MCQ, short/lon
 - **Before the next subsection or section**, close the `enumerate` block
 
 MCQ questions always use enumerate regardless of document type.
+
+### Question source checks and completeness
+
+- Report duplicate questions, missing options, incomplete statements, and conflicting DOCX/PDF wording. Do not silently correct or delete source content, deduplicate questions, or choose one conflicting wording without review.
+- Before insertion, verify each question file belongs to its intended chapter using source identifiers and the authoritative chapter map. Flag ambiguous or mismatched chapter placement rather than guess from file order.
+- Record question counts by type for each chapter, including repeated type blocks. Verify every supplied question, option, answer, table, and figure appears in both compiled TeX and LyX PDFs, preserving content and order. Counts alone are insufficient; report missing or mismatched content before publication.
 
 ## MCQ Rules
 
@@ -403,9 +411,11 @@ end{tabular}
 \end_layout
 ```
 
-### Assertion-Reasoning Lock
+### Assertion-Reasoning Source and Grid Rules
 
-Every Assertion-Reasoning pair **must** be followed by these exact fixed options — never alter the wording.
+Preserve the supplied Assertion, Reason, and option wording and order. Format the supplied four options in the same two-column checkbox grid as MCQs: A/B on the first row, C/D on the second. Do not stack the options vertically. Never insert fixed options, generate missing options, or rewrite source options. If options are missing or content is unclear, flag it for review rather than complete it. The placeholders below stand for supplied source content only.
+
+If the source supplies assertion-reason options once as common instructions for a section, repeat those exact supplied options beneath every Assertion-Reason pair covered by that section, using the same grid. This is repetition of source content, not permission to generate options. Do not apply them outside their stated scope; flag unclear applicability for review.
 
 **`.tex` format:**
 
@@ -413,10 +423,10 @@ Every Assertion-Reasoning pair **must** be followed by these exact fixed options
 \item \textbf{Assertion (A):} <ASSERTION TEXT>\\[0.06cm]
 \textbf{Reason (R):} <REASON TEXT>\\[0.13cm]
 \begin{tabular}{@{}p{0.45\textwidth} p{0.45\textwidth}@{}}
-$\square$ A) Both Assertion and Reason are correct; Reason is correct explanation. &
-$\square$ B) Both Assertion and Reason are correct; Reason is NOT correct explanation. \\
-$\square$ C) Assertion is correct; Reason is incorrect. &
-$\square$ D) Assertion is incorrect; Reason is correct.
+$\square$ A) <SOURCE OPTION_1> &
+$\square$ B) <SOURCE OPTION_2> \\
+$\square$ C) <SOURCE OPTION_3> &
+$\square$ D) <SOURCE OPTION_4>
 \end{tabular}
 ```
 
@@ -457,10 +467,10 @@ textwidth}@{}}
 \begin_layout Plain Layout
 $
 \backslash
-square$ A) Both Assertion and Reason are correct; Reason is correct explanation. &
+square$ A) <SOURCE OPTION_1> &
 $
 \backslash
-square$ B) Both Assertion and Reason are correct; Reason is NOT correct explanation.
+square$ B) <SOURCE OPTION_2>
 \backslash
 \backslash
 
@@ -469,10 +479,10 @@ square$ B) Both Assertion and Reason are correct; Reason is NOT correct explanat
 \begin_layout Plain Layout
 $
 \backslash
-square$ C) Assertion is correct; Reason is incorrect. &
+square$ C) <SOURCE OPTION_3> &
 $
 \backslash
-square$ D) Assertion is incorrect; Reason is correct.
+square$ D) <SOURCE OPTION_4>
 \end_layout
 
 \begin_layout Plain Layout
