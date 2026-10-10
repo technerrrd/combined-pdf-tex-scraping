@@ -1,4 +1,4 @@
-# CLAUDE.md <!-- version: v4.7 -->
+# CLAUDE.md <!-- version: v4.8 -->
 
 ## Maintenance Rule
 
@@ -656,6 +656,8 @@ Display: `\begin_inset Formula \n$$<MATH>$$\n\end_inset`
 `convert.py` extracts images and names them automatically (`image1.png`, `image2.jpeg`, etc.). **Do not rename them.** Map each image to its assigned filename in document order.
 
 **Sizing:** Read rendered display size from DOCX XML (`<wp:extent cx="..." cy="..."/>`, in EMUs where 914400 EMU = 1 inch). Pick the closest width from: `0.25`, `0.4`, `0.5`, `0.6`, `0.75`. Do not use raw pixel dimensions.
+
+**Question-diagram override (v4.8):** In both TeX and LyX PDFs, question diagrams must use half their otherwise selected rendered width and height. Apply an additional `0.5` multiplier once after normal sizing; retain aspect ratio, original image files, labels, content, and source order. This means half the current dimensions, not a fixed width of 50% of the text area and not a repeated halving on every rebuild. This override takes precedence over general image-sizing defaults only for embedded question figures; note images and full-page infographics retain their existing sizing. Implementation and PDF rebuilding are deferred until the user explicitly requests them; the current PDFs have not been resized.
 
 **`.tex` figure block (no `\caption{}`):**
 ```latex

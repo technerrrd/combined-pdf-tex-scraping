@@ -1,5 +1,23 @@
 # Handoff
 
+## 2026-10-10 Class 7 Maths sources and deferred diagram sizing
+
+- User authorized publishing the newly added Class 7 Maths question files and the previously agreed 50% diagram rule. Publication scope is seven DOCX/PDF pairs for Chapters 9-15 (14 files), `AGENTS.md`, `CLAUDE.md` v4.8, and both handoff documents. Formula PDFs, temporary files, and generated books are excluded. Use the clean `dev` clone at `tmp/codex-push-dev-20260924/` and fast-forward publication to the previously used `origin/main` and `origin/dev`; remote fetched and both heads confirmed at `d8ffb3d` before changes.
+- All seven Word packages passed ZIP integrity and document-read checks; all seven PDFs opened (51 pages). Source copies match SHA-256. This verifies file integrity, not question content, chapter mapping, or completeness for conversion; those audits remain pending.
+- Saved sizing rule: apply an additional 0.5 factor once to the otherwise selected question-diagram dimensions in both TeX and LyX; preserve proportions, source files, labels, and order. Notes and infographic sizing retain existing behavior. Never compound the factor on later rebuilds or interpret it as a fixed 50% text-width setting.
+- Implementation and rebuilding remain deferred per the user. No converter, adapter, or generated PDF was changed. Existing Class 8 PDFs retain their previous sizes; the source publication also carries the prior completed Class 8 build record below.
+- Validation for this update: Windows source file integrity/hash checks, documentation consistency and diff/whitespace review. No build, regression tests, compiler tests, Linux execution, or CI execution needed or claimed for this documentation/source-only change. Next: apply the sizing rule and build Class 7 only when separately requested, after source-content audits.
+
+## 2026-10-10 Class 8 Maths completed
+
+- Completed the user's objective: pushed rules and all 14 supplied question files, then built Chapters 8-14 with 484 top-level questions and 54 supplied question figures. No questions, options, answers, explanations, or missing source content were generated.
+- The publication clone at `tmp/codex-push-dev-20260924/` is clean on `dev`. Commit `d8ffb3da9a24feb0f8e12b8b6f1ce26960d6f401` was fast-forward pushed to both `origin/main` and `origin/dev`; live remote heads were verified. Generated books and temporary build adapters were excluded from Git. This final operational note is local, added after that push.
+- Published `stage2/output/Class8-Maths-Complete/`: themed LyX PDF 98 pages, direct TeX PDF 120 pages, editable sources, media, manifest, and validation reports. The existing `stage2/output/Class8-Maths/` was preserved. Both compilers and all mandatory structural, rendered-prose, equation, and image-order checks passed; final compiler diagnostics are empty. All 14 source hashes still match the pushed inputs.
+- Source issues preserved and reported: Chapter 10 Word/PDF sublabel differences; Chapter 14 an empty math placeholder and unfinished source Q56 clause `To make decorative pieces,`. No exact duplicate prompts were found. Per-chapter question counts are 68, 68, 70, 69, 70, 69, 70 for Chapters 8-14 respectively.
+- Windows tests: offline regressions 81 passed, 5 deselected; separate real compiler integration 1 passed, 85 deselected. No Linux or CI execution claimed. Optional independent reference-PDF coverage was not checked; supplied question PDF/DOCX content comparison and compiled-output checks passed for all seven chapters.
+- Page-by-page visual review was declined. Representative cover, assertion-reason grid, and corrected long-data-line pages were inspected. Assertion-reason options use A/B then C/D checkbox grids and supplied wording; numbering restarts per block and source sublabels are retained.
+- Build used validated offline caches with the local adapter `tmp/build_math8_complete.py` and sibling Windows `.venv`; automatic question ingestion in application code remains incomplete. The active export has no `.git` and includes a pre-existing pipeline overlay. Manifest records source commit, dirty state, adapter/pipeline hashes, and source hashes. Next: review the reported source issues with the author; do not complete them automatically.
+
 ## 2026-10-10 Class 8 Maths source publication and build
 
 - User authorized pushing the current rules and all seven chapter question DOCX/PDF pairs before completing the Class 8 Maths book. Publishing to both `origin/main` and `origin/dev` by fast-forward; no force push.

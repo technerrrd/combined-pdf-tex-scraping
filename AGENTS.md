@@ -28,6 +28,7 @@
 - Report duplicate questions, missing options, incomplete statements, and conflicting DOCX/PDF wording; do not silently correct or delete source content or choose between conflicting sources.
 - Verify each question file's chapter from source identifiers and the authoritative chapter map before insertion; flag ambiguous or mismatched placement.
 - Record question counts by type for every chapter and verify every supplied question, option, answer, table, and figure appears in both compiled outputs; counts alone do not establish completeness.
+- Question diagrams must render at 50% of their otherwise selected width and height in both TeX and LyX PDFs: apply an additional 0.5 sizing factor once, preserve aspect ratio and original image files, and keep source content/order intact. This overrides general image sizing only for question figures; notes and infographic sizing stay unchanged. The rule is documented but implementation/rebuilding is deferred until explicitly requested.
 - In question banks, add clear question-type headings and restart top-level numbering at 1 in every question-type block. If a type reappears after another type, repeat its heading and restart that block at 1; preserve subquestion labels, source order, and wording. Use only source-defined or clearly supported types, not guessed mark categories.
 
 ## Handoff maintenance
