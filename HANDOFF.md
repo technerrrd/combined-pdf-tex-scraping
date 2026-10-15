@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-10-15 Science source refresh prepared for publication
+
+- Updated the authoritative `Science-notes-links.xlsx` map to Class 6 Chapters 3, 4, 6, 7, 11, and 12; Class 7 Chapters 4-10; and Class 8 Chapters 3, 4, 7-10, and 12. The workbook opened successfully, all chapter rows were unique, and every URL used HTTPS on `edurev.in`.
+- Added Class 6 note PDFs for Chapters 3, 4, and 6; removed the no-longer-mapped tracked Class 6 note PDFs for Chapters 8-10. Replaced the Class 7 note PDFs for Chapters 5 and 9. Retained the existing tracked Class 7 Chapter 10 note because it remains in the workbook map and was not replaced in the active export.
+- Added seven Class 8 Science question DOCX/PDF pairs for Chapters 3, 4, 7, 8, 9, 10, and 12 (14 files). All Word packages passed ZIP/document checks; all PDFs opened. The seven question PDFs total 45 pages. All 1,542 substantive DOCX text-run checks matched the paired PDFs, and every detected A-D option sequence was complete. The five new/replaced note PDFs total 79 pages and contain extractable text.
+- Preserved and reported two source facts without correction: the Chapter 4 pair is named and contains electricity content for workbook Chapter 4, but both DOCX and PDF headers say Chapter 3; Class 8 Chapter 3 rows 31 and 32 repeat the prompt `Match the following:` but contain distinct supplied figures. No other exact repeated row text was found.
+- This update publishes source files only. No conversion, book build, reference-coverage check, compiler run, exhaustive page-by-page visual inspection, full semantic question audit, or Linux/CI execution is claimed. Generated outputs, caches, temporary workbook snapshots, and unrelated export-only pipeline differences remain excluded.
+- Publication branch: `dev` in `tmp/codex-push-dev-20260924/`, based on `6b156ffd7c4e35ab13640a4d36283445ae5e8d3e`; a fresh fetch confirmed both `origin/dev` and `origin/main` at that commit before preparation. Review the staged diff, hashes, and validation results before committing or pushing; never force-push.
+
+## 2026-10-15 Class 6 Maths completed
+
+- Completed and atomically published `stage2/output/Class6-Maths-Complete/` from the validated offline Class 6 Maths notes cache and the five supplied DOCX/PDF question pairs for Chapters 6-10. Both editable TeX/LyX sources and compiled PDFs passed; direct TeX is 80 pages and themed LyX is 72 pages. The earlier `stage2/output/Class6-Maths/` notes-only output remains preserved.
+- The book contains 347 top-level questions and 73 supplied question figures. Per-chapter question/figure counts are Chapter 6: 70/18, Chapter 7: 70/12, Chapter 8: 67/1, Chapter 9: 70/33, and Chapter 10: 70/9. Compiled prose checks found no missing supplied question text in either PDF. All question figures have an exact `scale / base_scale` ratio of `0.5`; notes and infographic sizing are unchanged.
+- Preserved and reported source issues without correction or deletion: DOCX/PDF sublabel-count differences in Chapters 6, 7, 9, and 10; the exact duplicate Chapter 6 prompts at source questions 39/48; Chapter 7 duplicate prompts at 5/8/10, 37/38, 44/47, and 53/54; and Chapter 9 duplicate prompts at 40/42/47 and 32/53. All 985 substantive DOCX prose checks across the five paired question PDFs matched.
+- Final `report.json`/`report.txt` status is `passed`, with empty compiler diagnostics and no reported overfull boxes. Windows verification: offline regressions 81 passed and 5 XLSX-dependent cases deselected; real compiler integration 1 passed and 85 deselected. No Linux or CI execution claimed. Exhaustive page-by-page review was not opted into and was skipped.
+
+## 2026-10-14 Class 7 and 8 Maths rebuilt with half-size question diagrams
+
+- Rebuilt and published `stage2/output/Class7-Maths-Complete/` and `stage2/output/Class8-Maths-Complete/` from validated offline caches and the supplied question DOCX/PDF pairs. Existing outputs were preserved through failed staging attempts and replaced only after both TeX and LyX PDFs passed compilation and strict structural/content checks.
+- Class 7 contains 477 top-level questions and 33 supplied question figures across Chapters 9-15; direct TeX is 94 pages and themed LyX is 77 pages. Class 8 contains 484 questions and 54 figures across Chapters 8-14; direct TeX is 110 pages and themed LyX is 91 pages. Every question figure records an exact `scale / base_scale` ratio of `0.5`; notes and infographic sizing were unchanged.
+- Added a narrow Windows compiler fallback after isolated LyX-profile empty-log exit 11 failures, plus dotless-i PDF extraction normalization for pdfTeX transliteration with regression coverage. These active-export pipeline changes remain uncommitted and were not included in this source-only publication.
+- Both final reports passed with empty compiler diagnostics. Windows tests: 81 passed, 5 deselected when excluding XLSX tests; real compiler integration 1 passed, 85 deselected. No Linux or CI execution claimed. Representative pages were inspected; exhaustive page-by-page review was not opted into and was skipped.
+
 ## 2026-10-10 Class 7 Maths sources and deferred diagram sizing
 
 - User authorized publishing the newly added Class 7 Maths question files and the previously agreed 50% diagram rule. Publication scope is seven DOCX/PDF pairs for Chapters 9-15 (14 files), `AGENTS.md`, `CLAUDE.md` v4.8, and both handoff documents. Formula PDFs, temporary files, and generated books are excluded. Use the clean `dev` clone at `tmp/codex-push-dev-20260924/` and fast-forward publication to the previously used `origin/main` and `origin/dev`; remote fetched and both heads confirmed at `d8ffb3d` before changes.
