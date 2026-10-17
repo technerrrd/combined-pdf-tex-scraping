@@ -326,6 +326,29 @@ def test_mcq_writers_preserve_math_in_prompt_and_options(tmp_path):
     assert r'\backslash' + '\n%' in lyx
 
 
+def test_question_writers_render_pre_option_figures_and_true_false_blanks(tmp_path):
+    import convert
+    media = tmp_path / 'media'
+    media.mkdir()
+    elements = [
+        dict(type='mcq', text='Choose the diagram.', options=['One', 'Two', 'Three', 'Four'],
+             pre_option_images=[{'filename': 'question.png', 'scale': .25}]),
+        dict(type='true_false', segments=[inline.run('The supplied statement.')]),
+    ]
+    tex_path = tmp_path / 'book.tex'
+    lyx_path = tmp_path / 'book.lyx'
+    convert.write_tex(elements, tex_path, media)
+    convert.write_lyx(elements, lyx_path, media)
+    tex = tex_path.read_text()
+    lyx = lyx_path.read_text()
+    assert tex.index('Choose the diagram.') < tex.index('media/question.png') < tex.index(r'\square$ A)')
+    assert r'width=0.25\textwidth' in tex
+    assert r'The supplied statement. \hfill \_\_\_\_\_\_\_\_' in tex
+    assert lyx.index('Choose the diagram.') < lyx.index('media/question.png') < lyx.index('square$ A)')
+    assert '\twidth 25text%' in lyx
+    assert 'The supplied statement.' in lyx and 'hfill' in lyx
+
+
 def test_publication_rollback(tmp_path,monkeypatch):
     old=tmp_path/'module'; old.mkdir(); (old/'good').write_text('old')
     staged=tmp_path/'staged'; staged.mkdir()
@@ -607,19 +630,22 @@ def test_typographic_dashes_match_tex_punctuation():
     assert norm('Health—not just disease')==norm('Health---not just disease')
     assert norm('books-almost') == norm('books-\nalmost')
     assert norm('well-being') == norm('well being')
+    assert norm('COVID-19') == norm('COVID-\n19')
+    assert norm('x-19') != norm('x19')
     assert norm('12-4') != norm('12-5')
     assert norm('20 °C') == norm('20 ◦C')
     assert norm('Water boils at 100 °C') == norm('Water boils at 100 C')
     assert norm(r'Water boils at 100 \circ C') == norm('Water boils at 100 °C')
     assert norm('Saptaṛiṣhi, Dhruva tārā, Sūrya') == norm('Saptar.is.hi Dhruva t�ar�a S�urya')
     assert norm('Saptaṛiṣhi and Sūrya') == norm('Saptar.is.hi and S¯urya')
+    assert norm('Bījagaṇita and bīja') == norm('B¯ıjagan. ita and b¯ıja')
     assert norm('Re\x01ectional \x02gure on the \x03oor') == norm('Reflectional figure on the floor')
 
 
 def test_release_workbook_preserves_class_sheet_order():
     workbook = Path(__file__).parents[1] / 'Science-notes-links.xlsx'
     rows = workbook_rows(workbook, [CLASSES[number]['sheet'] for number in (6, 7, 8)])
-    assert [number for number, _ in rows['Class 6th']] == [7, 8, 9, 10, 11, 12]
+    assert [number for number, _ in rows['Class 6th']] == [3, 4, 6, 7, 11, 12]
     assert [number for number, _ in rows['Class 7th']] == [4, 5, 6, 7, 8, 9, 10]
     assert [number for number, _ in rows['Class 8th']] == [3, 4, 7, 8, 9, 10, 12]
 

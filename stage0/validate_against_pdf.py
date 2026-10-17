@@ -22,25 +22,39 @@ def norm(text):
     # Restore browser-print ligatures, then normalize transliteration marks and
     # replacement characters without weakening mathematical symbol identity.
     text = text.translate({1: 'fl', 2: 'fi', 3: 'fl'})
+    # NFKD turns the triangle symbol ∆ into Greek δ, which the PDF text
+    # extractor may instead return as ∆/Δ. Canonicalize triangle glyphs first.
+    text = text.replace('∆', ' triangle ').replace('Δ', ' triangle ').replace('△', ' triangle ')
+    text = re.sub(r'\\Delta(?![a-z])', ' triangle ', text)
+    # The congruence sign is commonly extracted from PDFs as the two glyphs ∼=.
+    text = re.sub(r'[∼≅]\s*=', ' congruent ', text)
     text = unicodedata.normalize('NFKD', text)
+    text = re.sub(r'\u0338\s*=', ' neq ', text)
     text = ''.join(character for character in text if unicodedata.category(character) != 'Mn')
-    text = text.lower().replace('\u00ad', '').replace('\ufffd', '')
+    # pdfTeX can expose an accented ``i`` as a spacing accent followed by the
+    # dotless-i glyph (for example ``B¯ıja`` for ``Bīja``).
+    text = text.lower().replace('\u0131', 'i').replace('\u00ad', '').replace('\ufffd', '')
     text = text.replace('◦', '°')
     text = re.sub(r'--+|[–—]', '', text)
     text = re.sub(r'(\w)-\s*\n\s*(\w)', r'\1\2', text)
     text = re.sub(r'\\rightarrow\b', '→', text)
     for symbol, macro in sorted(inline.SYMBOLS.items(), key=lambda pair: -len(pair[1])):
-        text = re.sub(re.escape(macro.lower()) + r'(?![a-z])', lambda _: symbol.lower(), text)
+        replacement = 'triangle' if macro in (r'\Delta', r'\triangle') else 'congruent' if macro == r'\cong' else symbol.lower()
+        text = re.sub(re.escape(macro.lower()) + r'(?![a-z])', lambda _: replacement, text, flags=re.I)
     text = re.sub(r'\\(?:frac|dfrac|tfrac|sqrt|text|mathrm|mathbf|mathit|left|right)\b', '', text)
     text = re.sub(r'\\(?:begin|end)\{[^}]+\}', '', text)
     # PDF text extraction omits TeX's subscript marker while retaining its
     # contents (for example, SO_2 is extracted as SO2).
     text = re.sub(r'(?<=\w)_(?=\w)', '', text)
     # Preserve operator identity: opposite inequalities/arrows are not equivalent.
-    operators = {'→':' to ', '⟶':' to ', '←':' leftarrow ', '↔':' leftrightarrow ', '⇌':' rightleftharpoons ', '×':' times ', '÷':' div ', '±':' pm ', '≈':' approx ', '≤':' leq ', '≥':' geq ', '≠':' neq ', '∞':' infty ', '∴':' therefore ', '°':'', '·':' cdot ', '=':' equals ', '+':' plus ', '−':' minus '}
+    operators = {'→':' to ', '⟶':' to ', '←':' leftarrow ', '↔':' leftrightarrow ', '⇌':' rightleftharpoons ', '×':' times ', '÷':' div ', '±':' pm ', '≈':' approx ', '≤':' leq ', '≥':' geq ', '≠':' neq ', '∆':' triangle ', 'Δ':' triangle ', '△':' triangle ', '≅':' congruent ', '∠':' angle ', '∞':' infty ', '∴':' therefore ', '°':'', '·':' cdot ', '=':' equals ', '+':' plus ', '−':' minus '}
     for symbol, word in operators.items(): text = text.replace(symbol, word)
     text = re.sub(r'[^\S\n]+', ' ', text)
-    text = re.sub(r'(?<=\w)-(?=\w)', '', text)
+    # Multi-letter hyphenated words and letter-number identifiers compare like
+    # PDF line-break joins. One-letter subtraction such as x-19 stays distinct.
+    text = re.sub(r'\b([^\W\d_]{2,})-([^\W\d_]{2,})\b', r'\1\2', text)
+    text = re.sub(r'\b([^\W\d_]{2,})-(\d+)\b', r'\1\2', text)
+    text = re.sub(r'(?<=\w)-(?=\w)', ' minus ', text)
     text = text.replace('-', ' minus ')
     text = re.sub(r'[^\w\s]', '', text, flags=re.UNICODE)
     return re.sub(r'[^\w]+', '', text, flags=re.UNICODE)

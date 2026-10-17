@@ -100,7 +100,7 @@ def rendered_text(doc, page_range, furniture):
 
 
 def prose_chunks(segments):
-    """Group styled text runs while keeping explicit equations as boundaries."""
+    """Group prose separately from equations because PDF extraction is unstable."""
     import inline_content as inline
     chunks = []
     current = []
@@ -152,20 +152,11 @@ def check_structure(chapters, directory, module, outputs):
             for runs in segments:
                 if kind != 'heading':
                     # Validate complete mixed-style prose. Math has dedicated
-                    # source checks because PDF extraction is unstable.
-                    adapted = inline.adapt(runs)
-                    prose_only = ''.join(segment['text'] for segment in adapted
-                                         if segment['kind'] != 'math')
-                    if len(norm(prose_only)) >= 3:
-                        # Matrix/display math is verified in TeX/LyX above, but
-                        # PDF text extraction does not preserve its source markup.
-                        # Keep simple inline operators and units in the prose
-                        # comparison while treating complex equations as a space.
-                        prose[ch['num']].append(''.join(
-                            (' ' if segment.get('display') or r'\begin{' in segment['text']
-                             else f" {segment['text']} ")
-                            if segment['kind'] == 'math' else segment['text']
-                            for segment in adapted))
+                    # source checks because PDF extraction is unstable. Display
+                    # equations split adjacent prose: extracted equation text
+                    # must not make otherwise intact prose appear discontinuous.
+                    prose[ch['num']].extend(
+                        chunk for chunk in prose_chunks(runs) if len(norm(chunk)) >= 3)
                 rendered = inline.tex(runs)
                 if rendered and rendered not in tex: raise ValidationError('Generated TeX lost source content')
                 for s in inline.adapt(runs):

@@ -380,6 +380,14 @@ def write_tex(elements, out_path: Path, media_dir: Path):
             rendered = render_tex_segments(el['segments'])
             lines.append(f'\\par {rendered}\n\n')
 
+        elif t == 'true_false':
+            close_enum()
+            rendered = render_tex_segments(el['segments'])
+            lines.append(
+                f'\\par {rendered} \\hfill '
+                r'\_\_\_\_\_\_\_\_' + '\n\n'
+            )
+
         elif t == 'mcq':
             open_enum()
             q = tex_escape(el['text'])
@@ -389,6 +397,14 @@ def write_tex(elements, out_path: Path, media_dir: Path):
             if 'option_segments' in el:
                 opts = [render_tex_segments(o) for o in el['option_segments']]
             lines.append(f'\\item \\textbf{{{q}}}\\\\[0.13cm]\n')
+            for image in el.get('pre_option_images', []):
+                img_rel = f"media/{image['filename']}"
+                lines.append('\\begin{center}\n')
+                lines.append(
+                    f"\\includegraphics[width={image['scale']}\\textwidth]"
+                    f"{{{img_rel}}}\n"
+                )
+                lines.append('\\end{center}\n')
             lines.append(r'\begin{tabular}{@{}p{0.45\textwidth} p{0.45\textwidth}@{}}' + '\n')
             lines.append(f'$\\square$ A) {opts[0]} & $\\square$ B) {opts[1]} \\\\\n')
             lines.append(f'$\\square$ C) {opts[2]} & $\\square$ D) {opts[3]}\n')
@@ -1073,6 +1089,15 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
             lines.append(render_lyx_segments(el['segments']))
             lines.append('\n\\end_layout\n\n')
 
+        elif t == 'true_false':
+            close_enum()
+            lines.append('\\begin_layout Standard\n')
+            lines.append(render_lyx_segments(el['segments']))
+            lines.append('\n')
+            blank = r'\hfill \_\_\_\_\_\_\_\_'.replace('\\', '\\backslash\n')
+            lines.append(ert(blank))
+            lines.append('\\end_layout\n\n')
+
         elif t == 'mcq':
             in_enum = True
             q = el['text']
@@ -1091,6 +1116,12 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
                 f'\\backslash\ntextbf{{{q}}}\\backslash\n\\backslash\n[0.13cm]\n'
             )
             lines.append(ert(q_ert))
+            for image in el.get('pre_option_images', []):
+                scale_pct = int(round(image['scale'] * 100))
+                lines.append('\\begin_inset Graphics\n')
+                lines.append(f"\tfilename media/{image['filename']}\n")
+                lines.append(f'\twidth {scale_pct}text%\n')
+                lines.append('\\end_inset\n\n')
             tab = (
                 '\\backslash\nbegin{tabular}{@{}p{0.45\\backslash\ntextwidth} '
                 'p{0.45\\backslash\ntextwidth}@{}}\n'
@@ -1106,7 +1137,7 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
         elif t == 'image':
             close_enum()
             fname = el['filename']
-            scale_pct = int(el['scale'] * 100)
+            scale_pct = int(round(el['scale'] * 100))
             lines.append('\\begin_layout Standard\n')
             lines.append('\\align center\n')
             lines.append('\\begin_inset Graphics\n')

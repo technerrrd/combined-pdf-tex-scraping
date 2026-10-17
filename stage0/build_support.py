@@ -175,6 +175,7 @@ def compiler_python_environment(directory, environ=None, platform_name=None, pyt
 
 def compile_documents(directory, module, programs, diagnostics=None):
     directory = Path(directory)
+    current_platform = os.name
     outputs = {}
     diagnostics = [] if diagnostics is None else diagnostics
     environment, shim = compiler_python_environment(directory)
@@ -192,9 +193,22 @@ def compile_documents(directory, module, programs, diagnostics=None):
             # A fresh LyX userdir is configured on first invocation. On Windows
             # LyX can return 1 after writing its configuration without exporting;
             # retry only when that first-run configuration was actually created.
-            if not (lyx_userdir / 'lyxrc.defaults').is_file():
-                raise
-            command(export_command, directory, directory / 'lyx-export.log', environment=environment)
+            configured = (lyx_userdir / 'lyxrc.defaults').is_file()
+            if configured:
+                try:
+                    command(export_command, directory, directory / 'lyx-export.log', environment=environment)
+                except BuildError:
+                    configured = False
+            if not configured:
+                # Some Windows LyX 2.4 installations keep returning 11 with an
+                # empty log for a newly isolated profile, either before or
+                # after generating its defaults. The already configured user
+                # profile can still perform the same noninteractive export.
+                if current_platform != 'nt':
+                    raise
+                fallback_command = [programs['lyx'], '-n', '-batch',
+                                    '-E', 'pdflatex', exported, module + '.lyx']
+                command(fallback_command, directory, directory / 'lyx-export.log', environment=environment)
         shutil.rmtree(lyx_userdir, ignore_errors=True)
         if not (directory / exported).exists(): raise BuildError('LyX did not export TeX')
         # LyX sometimes emits absolute PNG paths; keep only paths within this build portable.

@@ -161,6 +161,22 @@ and `--image-scale` to override the default. Optional reference validation uses
 repeatable `--reference CLASS=PDF` and matching `--chapter-map CLASS=JSON`
 arguments when a combined reference needs an explicit map.
 
+The completed Science practice-question editions use the portable adapters in
+`tools/`. They preserve supplied wording and ordering, add per-type headings and
+numbering resets, render assertion-reason choices in the two-row grid, and apply
+the required one-time 0.5 scale to question figures:
+
+```powershell
+.venv/Scripts/python.exe tools/rebuild_class6_science_practice.py
+.venv/Scripts/python.exe tools/rebuild_class8_science_practice.py
+```
+
+The Class 6 command requires the separately supplied question DOCX/PDF pairs in
+`Class 6th Science/`; those user inputs and `input/scraped/` remain intentionally
+outside Git. Use `tools/audit_class6_science.py` for the read-only source audit.
+All three tools derive provenance from the current checkout and contain no
+machine-specific sibling-checkout paths.
+
 Publication uses an exclusive lock. If interrupted during publication, inspect
 `.<module>.publish.lock` and staging directory before removing the stale lock or
 restoring the previous directory. A previous snapshot is not retained after a
