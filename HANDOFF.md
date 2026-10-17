@@ -2,6 +2,7 @@
 
 ## 2026-10-17 portable main-branch handoff
 
+- The reviewed portable source change was pushed to `origin/main` as commit `5264332` (`feat: preserve complete science build context`).
 - Prepared the maintained checkout on `main` for migration to another computer. Promoted the completed Science practice adapters and Class 6 source-audit helper from ignored temporary files into tracked, machine-independent scripts under `tools/`; removed sibling-checkout assumptions and documented their use in `README.md`.
 - Reconciled the active build overlay without importing stale reversions: retained automatic cleanup of successful publication snapshots and existing equation/operator normalization checks, while adding the verified Windows LyX fallback, display-equation prose handling, question true/false blanks, pre-option figures, rounded LyX image scaling, Class 6 workbook map, and `COVID-19` line-break normalization.
 - Preserved the complete Class 6/Class 8 operational history in both handoffs and the production template settings used by the final books. Generated outputs, caches, environments, logs, secrets, and the separately supplied untracked Class 6 question inputs remain outside Git; the tools explain what must be copied separately for a rebuild.

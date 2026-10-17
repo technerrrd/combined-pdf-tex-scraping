@@ -2,6 +2,8 @@
 
 ## 2026-10-17 portable main-branch migration
 
+The reviewed portable source change was pushed to `origin/main` as commit `5264332` (`feat: preserve complete science build context`).
+
 The maintained Git checkout was advanced to current `origin/main` and prepared as the portable source of truth for moving the project to another computer. The completed Science question adapters and Class 6 read-only source audit were promoted from ignored temporary files to `tools/rebuild_class8_science_practice.py`, `tools/rebuild_class6_science_practice.py`, and `tools/audit_class6_science.py`. They now derive provenance from the current checkout, use repository-local cache/output paths, and contain no dependency on the old sibling clean clone. `README.md` documents their prerequisites and commands.
 
 The active overlay was reconciled rather than copied wholesale. The maintained branch keeps successful-publication snapshot cleanup and its existing subscript/arrow identity tests. It gains the verified Windows LyX configured-profile fallback, equation-boundary prose validation, triangle/congruence/transliteration normalization, `COVID-19` PDF line-break handling without weakening `x-19`, true/false answer blanks, MCQ pre-option figures, rounded LyX scaling, current Class 6 workbook mapping, and the template settings used by the completed books. Regression coverage was added for the new question writer behavior and identifier normalization.
