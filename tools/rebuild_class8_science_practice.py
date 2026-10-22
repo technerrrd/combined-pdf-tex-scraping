@@ -32,6 +32,9 @@ WORKBOOK = ROOT / "Science-notes-links.xlsx"
 QUESTIONS_DIR = Path(os.environ.get('SCIENCE_INPUT_ROOT', ROOT)) / "Class 8th Science"
 CHAPTER_NUMBERS = (3, 4, 7, 8, 9, 10, 12)
 MODULE = "Final-Science_Class8th"
+QUESTION_HEADINGS = {}
+ANSWER_LINES_FROM_MARKS = False
+TRUE_FALSE_INLINE_BLANKS = False
 
 
 def workbook_rows(path: Path, sheet_name: str):
@@ -479,8 +482,9 @@ def practice_elements(chapter: int, media_dir: Path):
         if not title:
             raise ValueError('Unsupported question type')
         if title != current_heading:
-            result.append(heading(title))
-            expected.append(title)
+            display_title = QUESTION_HEADINGS.get(title, title)
+            result.append(heading(display_title))
+            expected.append(display_title)
             current_heading = title
         type_counts[title] += 1
         raw_events = row_events(document, row, media_dir, chapter)
@@ -515,8 +519,11 @@ def practice_elements(chapter: int, media_dir: Path):
                 if title == 'Fill in the Blanks':
                     content[0]['ragged_right'] = True
                 if title == 'True or False':
-                    content.append({'type': 'answer_lines', 'count': 1})
-                    answer_line_count += 1
+                    if TRUE_FALSE_INLINE_BLANKS:
+                        content[0]['answer_blank'] = True
+                    else:
+                        content.append({'type': 'answer_lines', 'count': 1})
+                        answer_line_count += 1
                 result.append({'type': 'question', 'content': content})
                 expected.append(line)
                 rendered_counts[title] += 1
@@ -547,6 +554,11 @@ def practice_elements(chapter: int, media_dir: Path):
                 content.append(value)
         if title != 'Case-Based Questions' and not any(kind == 'subquestions' for kind, value in events):
             count = 1 if title in {'Very Short Questions', 'Short Questions'} else 3 if title in {'Long Questions', 'Very Long Questions'} else 0
+            if count and ANSWER_LINES_FROM_MARKS:
+                mark_match = re.fullmatch(r'\s*\[?\s*(\d+)\s*\]?\s*', marks)
+                if mark_match is None or int(mark_match.group(1)) < 1:
+                    raise ValueError(f'Question {number} has unclear answer-line marks: {marks!r}')
+                count = int(mark_match.group(1))
             if count:
                 content.append({'type': 'answer_lines', 'count': count})
                 answer_line_count += count

@@ -16,6 +16,9 @@ def tex_content(elements, render, tex_escape):
         kind = element['type']
         if kind == 'body':
             rendered = render(element['segments'])
+            if element.get('answer_blank'):
+                rendered = (r'\parbox[t]{\dimexpr\linewidth-8em\relax}{' + rendered
+                            + r'}\hfill\mbox{\_\_\_\_\_\_\_\_}')
             output.append(('{\\raggedright ' + rendered + '\\par}\n') if element.get('ragged_right') else rendered + '\\par\n')
         elif kind == 'answer_lines':
             output.extend('\\par\\noindent\\rule{\\linewidth}{0.3pt}\\par\\vspace{0.55em}\n' for _ in range(element['count']))
@@ -98,7 +101,12 @@ def lyx_question(content, render, tex_escape):
     first = content[0]
     if first['type'] != 'body':
         raise ValueError('Question must start with supplied text')
-    output = '\\begin_layout Enumerate\n' + render(first['segments']) + '\n\\end_layout\n'
+    first_text = render(first['segments'])
+    if first.get('answer_blank'):
+        first_text = (lyx_ert(r'\parbox[t]{\dimexpr\linewidth-8em\relax}{')
+                      + first_text + '\n'
+                      + lyx_ert(r'}\hfill\mbox{\_\_\_\_\_\_\_\_}'))
+    output = '\\begin_layout Enumerate\n' + first_text + '\n\\end_layout\n'
     if len(content) > 1:
         for element in content[1:]:
             if element['type'] == 'subquestions':

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 import rebuild_class8_science_practice as build
+import convert
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,29 @@ build.WORKBOOK = WORKBOOK
 build.QUESTIONS_DIR = QUESTIONS_DIR
 build.CHAPTER_NUMBERS = CHAPTER_NUMBERS
 build.MODULE = MODULE
+build.QUESTION_HEADINGS = {
+    'Short Questions': 'Short Question Answers',
+    'Very Short Questions': 'Very Short Answer Questions',
+    'Long Questions': 'Descriptive Answer Questions',
+    'Very Long Questions': 'Long Answer Questions',
+}
+build.ANSWER_LINES_FROM_MARKS = True
+build.TRUE_FALSE_INLINE_BLANKS = True
+
+# Keep the final contents entry with the preceding entries as the book grows.
+_copy_template_assets = convert.copy_template_assets
+
+
+def copy_class6_template_assets(template_dir, out_dir):
+    _copy_template_assets(template_dir, out_dir)
+    path = out_dir / 'structure.tex'
+    structure = path.read_text(encoding='utf-8')
+    structure = structure.replace(r'{\addvspace{3pt}\sffamily\bfseries}',
+                                  r'{\addvspace{2pt}\sffamily\bfseries}')
+    path.write_text(structure, encoding='utf-8')
+
+
+convert.copy_template_assets = copy_class6_template_assets
 build.SOURCE_ISSUES = [{
     "chapter": 12,
     "kind": "internal_chapter_title_mismatch",

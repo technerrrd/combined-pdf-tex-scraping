@@ -170,6 +170,112 @@ def test_class8_chapter12_actual_omml_arrow_is_retained(adapter):
     assert all("\u200b" not in text for text in extracted)
 
 
+def test_worksheet_omml_subscript_and_letter_superscript_are_retained(adapter, tmp_path):
+    from docx.oxml import OxmlElement
+
+    def append_script(paragraph, kind, base_text, script_text):
+        math = OxmlElement("m:oMath")
+        script = OxmlElement(f"m:{kind}")
+        for branch_name, value in (
+            ("e", base_text),
+            ("sup" if kind == "sSup" else "sub", script_text),
+        ):
+            branch = OxmlElement(f"m:{branch_name}")
+            run = OxmlElement("m:r")
+            text = OxmlElement("m:t")
+            text.text = value
+            run.append(text)
+            branch.append(run)
+            script.append(branch)
+        math.append(script)
+        paragraph._p.append(math)
+
+    document = Document()
+    vitamin = document.add_paragraph("Vitamin ")
+    append_script(vitamin, "sSub", "B", "1")
+    vitamin.add_run(" is supplied.")
+    temperature = document.add_paragraph("Normal temperature is ")
+    append_script(temperature, "sSup", "37", "o")
+    temperature.add_run(" C.")
+
+    extracted = [
+        adapter.worksheet_paragraph_text(vitamin),
+        adapter.worksheet_paragraph_text(temperature),
+    ]
+
+    assert extracted == ["Vitamin B₁ is supplied.", "Normal temperature is 37ᵒ C."]
+
+    elements = [
+        {"type": "question", "content": [
+            {"type": "body", "segments": adapter.text_runs(value)},
+        ]}
+        for value in extracted
+    ]
+    tex_path = tmp_path / "class6-omml.tex"
+    lyx_path = tmp_path / "class6-omml.lyx"
+    convert.write_tex(elements, tex_path, tmp_path)
+    convert.write_lyx(elements, lyx_path, tmp_path)
+
+    tex = tex_path.read_text(encoding="utf-8")
+    lyx = lyx_path.read_text(encoding="utf-8")
+    assert r"B\textsubscript{1}" in tex
+    assert r"37\textsuperscript{o}" in tex
+    assert "script subscript" in lyx and "script superscript" in lyx
+
+
+def test_configured_headings_and_mark_based_answer_lines(adapter, tmp_path, monkeypatch):
+    monkeypatch.setattr(adapter, 'QUESTION_HEADINGS', {
+        'Very Short Questions': 'Very Short Answer Questions',
+        'Short Questions': 'Short Question Answers',
+        'Long Questions': 'Descriptive Answer Questions',
+        'Very Long Questions': 'Long Answer Questions',
+    })
+    monkeypatch.setattr(adapter, 'ANSWER_LINES_FROM_MARKS', True)
+    elements, expected, metadata = adapter.practice_elements(9, tmp_path / 'media')
+    for title in adapter.QUESTION_HEADINGS.values():
+        assert title in expected
+    counts = {}
+    current = None
+    for element in elements:
+        if element['type'] == 'heading':
+            current = element['text']
+        elif element['type'] == 'question' and current in adapter.QUESTION_HEADINGS.values():
+            counts.setdefault(current, set()).update(
+                item['count'] for item in element['content'] if item['type'] == 'answer_lines'
+            )
+    assert counts == {
+        'Very Short Answer Questions': {1},
+        'Short Question Answers': {2},
+        'Descriptive Answer Questions': {3},
+        'Long Answer Questions': {5},
+    }
+
+
+def test_true_false_inline_blanks_keep_numbering_without_writing_rules(adapter, tmp_path, monkeypatch):
+    monkeypatch.setattr(adapter, 'TRUE_FALSE_INLINE_BLANKS', True)
+    elements, _, metadata = adapter.practice_elements(9, tmp_path / 'media')
+    statements = []
+    in_true_false = False
+    for element in elements:
+        if element['type'] == 'heading':
+            in_true_false = element['text'] == 'True or False'
+        elif in_true_false and element['type'] == 'question':
+            assert len(element['content']) == 1
+            assert element['content'][0]['answer_blank'] is True
+            statements.append(element)
+    assert len(statements) == metadata['rendered_items_by_type']['True or False']
+    for extension, writer in [('tex', convert.write_tex), ('lyx', convert.write_lyx)]:
+        path = tmp_path / ('true-false.' + extension)
+        writer(statements, path, tmp_path)
+        rendered = path.read_text(encoding='utf-8')
+        assert rendered.count('mbox{') == len(statements)
+        if extension == 'lyx':
+            assert rendered.count('\n\\begin_inset ERT') == 2 * len(statements)
+        assert rendered.count('parbox[t]') == len(statements)
+        assert 'linewidth}{0.3pt}' not in rendered
+        assert rendered.count('\\item ' if extension == 'tex' else '\\begin_layout Enumerate') == len(statements)
+
+
 def test_unsupported_worksheet_omml_fails_closed(adapter):
     from docx.oxml import OxmlElement
 

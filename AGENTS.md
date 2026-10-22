@@ -1,5 +1,9 @@
 # Project instructions
 
+- Class 6 true/false statements use a short right-aligned answer blank beside each numbered statement in both formats; never give them full-width written-answer rules.
+
+- Class 6 Science uses these written-answer headings: Very Short Answer Questions, Short Question Answers, Descriptive Answer Questions, and Long Answer Questions. Allocate one answer rule per supplied mark (1/2/3/5 respectively); retain individual supplied case-part marks and the existing MCQ, fill-in, and supplied-answer exceptions.
+
 - Read HANDOFF.md and docs/CODEX_HANDOFF.md before starting work.
 - Check the current Git branch and working-tree status before changes.
 - Maintain AGENTS.md for concise durable instructions, HANDOFF.md for the latest operational state, and docs/CODEX_HANDOFF.md for detailed context, design rationale, known problems, assumptions, and next steps.

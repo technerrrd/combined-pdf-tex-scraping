@@ -1,4 +1,4 @@
-# CLAUDE.md <!-- version: v4.8 -->
+# CLAUDE.md <!-- version: v4.10 -->
 
 ## Maintenance Rule
 
@@ -496,6 +496,20 @@ end{tabular}
 ```
 
 ## Subject-Specific Spacing Rules
+
+### Class 6 Science override (2026-10-23)
+
+True/false items retain native question numbering and a short right-aligned
+answer blank beside each statement. Reserve space for that blank when statements
+wrap; do not insert full-width writing rules beneath true/false statements.
+
+Written-answer headings are Very Short Answer Questions (1 mark), Short Question
+Answers (2 marks), Descriptive Answer Questions (3 marks), and Long Answer
+Questions (5 marks). Allocate one writing rule per supplied mark, so a five-mark
+question has five rules. Case subparts retain their own supplied mark counts;
+unmarked subparts retain one rule. MCQ, fill-in, and supplied-answer exceptions
+remain in force. This overrides the historical fixed one/three-rule defaults
+below for Class 6 Science.
 
 ### Short vs Long Question Detection
 
