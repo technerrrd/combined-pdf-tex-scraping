@@ -38,10 +38,13 @@ def tex_content(elements, render, tex_escape):
                 output.append('\\\\\\hline\n')
             output.append('\\end{tabular}\\par\\medskip\n')
         elif kind == 'options':
-            options = element['values']
+            from inline_content import tex, text_runs
+            # Options need the same typed scripts as question prompts; escaping
+            # flat text alone loses the supplied superscript letter-o notation.
+            options = [tex(text_runs(value)) for value in element['values']]
             output.append('\\par\\begin{tabular}{@{}p{.48\\linewidth}p{.48\\linewidth}@{}}\n')
-            output.append('$\\square$ A) ' + tex_escape(options[0]) + ' & $\\square$ B) ' + tex_escape(options[1]) + '\\\\\n')
-            output.append('$\\square$ C) ' + tex_escape(options[2]) + ' & $\\square$ D) ' + tex_escape(options[3]) + '\n\\end{tabular}\\par\n')
+            output.append('$\\square$ A) ' + options[0] + ' & $\\square$ B) ' + options[1] + '\\\\\n')
+            output.append('$\\square$ C) ' + options[2] + ' & $\\square$ D) ' + options[3] + '\n\\end{tabular}\\par\n')
         else:
             raise ValueError('Unsupported question content: ' + kind)
     return ''.join(output)

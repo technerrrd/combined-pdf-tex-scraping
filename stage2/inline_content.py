@@ -79,7 +79,7 @@ def text_runs(text, bold=False):
         buffer = ''
         for c in part:
             name = unicodedata.name(c, '')
-            kind = 'sub' if 'SUBSCRIPT' in name else 'sup' if 'SUPERSCRIPT' in name else None
+            kind = 'sub' if 'SUBSCRIPT' in name else 'sup' if 'SUPERSCRIPT' in name or c == 'ᵒ' else None
             if c in SYMBOLS or kind:
                 if buffer:
                     result.append(run(buffer, bold)); buffer = ''

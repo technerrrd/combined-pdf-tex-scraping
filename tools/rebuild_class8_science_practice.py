@@ -26,6 +26,7 @@ from docx.oxml.ns import qn
 import pymupdf
 from PIL import Image
 from convert import pick_scale
+from inline_content import text_runs
 
 WORKBOOK = ROOT / "Science-notes-links.xlsx"
 QUESTIONS_DIR = Path(os.environ.get('SCIENCE_INPUT_ROOT', ROOT)) / "Class 8th Science"
@@ -162,7 +163,7 @@ def without_mark_annotation(text: str) -> str:
 
 
 def body(text: str, bold=False, page_break_before=False):
-    element = {"type": "body", "segments": [(clean(text), bool(bold))]}
+    element = {"type": "body", "segments": text_runs(clean(text), bool(bold))}
     if page_break_before:
         element["page_break_before"] = True
     return element
@@ -217,24 +218,29 @@ def row_question(row):
 def worksheet_paragraph_text(paragraph):
     """Retain supplied simple OMML in document order; reject unknown math."""
     math_ns = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
-    superscripts = str.maketrans('0123456789+-=()', '⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾')
+    superscripts = str.maketrans('0123456789+-=()o', '⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ᵒ')
+    subscripts = str.maketrans('0123456789+-=()', '₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎')
 
     def math_text(node):
         tag = node.tag.rsplit('}', 1)[-1]
-        if tag in {'rPr', 'sSupPr', 'ctrlPr'}:
+        if tag in {'rPr', 'sSupPr', 'sSubPr', 'ctrlPr'}:
             return ''
         if tag == 't':
             return node.text or ''
-        if tag == 'sSup':
+        if tag in {'sSup', 'sSub'}:
+            is_super = tag == 'sSup'
+            script_kind = 'superscript' if is_super else 'subscript'
             base = node.find('{' + math_ns + '}e')
-            exponent = node.find('{' + math_ns + '}sup')
+            exponent = node.find('{' + math_ns + '}' + ('sup' if is_super else 'sub'))
             if base is None or exponent is None:
-                raise ValueError('Incomplete worksheet OMML superscript')
+                raise ValueError('Incomplete worksheet OMML ' + script_kind)
             power = math_text(exponent)
-            if not power or any(char not in '0123456789+-=()' for char in power):
-                raise ValueError('Unsupported worksheet OMML superscript: ' + power)
-            return math_text(base).replace('\u200b', '') + power.translate(superscripts)
-        if tag in {'oMath', 'oMathPara', 'e', 'sup', 'r'}:
+            allowed = '0123456789+-=()' + ('o' if is_super else '')
+            if not power or any(char not in allowed for char in power):
+                raise ValueError('Unsupported worksheet OMML ' + script_kind + ': ' + power)
+            mapping = superscripts if is_super else subscripts
+            return math_text(base).replace('\u200b', '') + power.translate(mapping)
+        if tag in {'oMath', 'oMathPara', 'e', 'sup', 'sub', 'r'}:
             return ''.join(math_text(child) for child in node)
         raise ValueError('Unsupported worksheet OMML element: ' + tag)
 

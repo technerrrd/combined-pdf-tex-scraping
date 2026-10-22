@@ -1,5 +1,15 @@
 # Handoff
 
+## 2026-10-22 Class 6 validation failed; no implementation or publication
+
+- Latest request was validation only. Checked the maintained `main` source at `acf34162b749c8c4181878f2f8251e5088685596`; no pipeline/test/input files were changed, no outputs replaced, and no commit/push performed. This section updates diagnostic context only.
+- Current source audits fail Chapter 3 with `Unsupported worksheet OMML element: sSub` and Chapter 7 with `Unsupported worksheet OMML superscript: o`. Chapter 3 question 59 loses the supplied subscript 1 in Vitamin B; Chapter 7 question 11 (prompt plus four choices) and question 40 lose six supplied superscript lowercase-o temperature markers. Preserve the literal source o; do not infer/replace it with a degree sign.
+- Independent smaller-model validation confirmed all seven omissions in both historical candidate PDFs against the paired source PDFs. Source pages: Chapter 3 p7, Chapter 7 pp2/4. Candidate TeX pages: 27/79/83; candidate LyX: 25/69/71.
+- Chapters 4, 6, 11 and 12 passed 233, 212, 201 and 187 paired DOCX/PDF checks. All 19 source/workbook hashes match the earlier candidate. Both historical PDFs open (128 TeX / 108 LyX pages); all 118 LyX image references resolve. Historical inventory remains 354 source rows, 450 top-level rendered items, 12 tables, 72 case parts, 498 answer lines.
+- The historical candidate's writer hash differs from the current writer; its old passed report is not approval of current sources. Fresh compilation and full final-page review were not run after mandatory source validation failed. The corrected Class 6 release remains unapproved.
+- Diagnostic report in the active export: `tmp/class6-validation-20261022.md`. Next step requires authorization to implement exact subscript and letter-superscript support, add regressions, rebuild, and repeat all required validation. Class 8 and all published outputs remain unchanged.
+
+
 ## 2026-10-22 Git migration checkpoint
 
 - The user explicitly authorized committing and pushing the current project-source changes to `origin/main` so work can continue on another computer. This is a one-off authorization, not standing permission for future automatic pushes.
