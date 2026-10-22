@@ -80,20 +80,29 @@ def rendered_text(doc, page_range, furniture):
     """Return PDF text with page numbers and repeated document headings removed."""
     from validate_against_pdf import norm
     furniture_keys = {norm_value for value in furniture if (norm_value := norm(value))}
+    def running_heading(value):
+        return (re.match(r'^\d*\s*chapter\s+\d+\.\s+', value, re.I) or
+                re.match(r'^\d+(?:\.\d+)+\.?\s+\S', value))
     lines = []
     for page_number in range(page_range['start_page'] - 1, page_range['end_page']):
         page = doc[page_number]
         for block in page.get_text('dict')['blocks']:
-            for line in block.get('lines', []):
+            block_lines = block.get('lines', [])
+            # Boxed running headers can occupy two lines and end below y=80.
+            # Remove the whole isolated header block, never its body continuation.
+            if block_lines and all(line['bbox'][3] < 100 for line in block_lines) and any(
+                running_heading(''.join(span['text'] for span in line['spans']).strip())
+                for line in block_lines
+            ):
+                continue
+            for line in block_lines:
                 stripped = ''.join(span['text'] for span in line['spans']).strip()
                 normalized = norm(stripped)
                 y0, y1 = line['bbox'][1], line['bbox'][3]
                 in_margin = y0 < 80 or y1 > page.rect.height - 35
                 if not normalized or re.fullmatch(r'\d+(?:\.\d+)*', stripped):
                     continue
-                running_heading = (re.match(r'^\d*\s*chapter\s+\d+\.\s+', stripped, re.I) or
-                                   re.match(r'^\d+(?:\.\d+)+\.?\s+\S', stripped))
-                if in_margin and (running_heading or normalized in furniture_keys):
+                if in_margin and (running_heading(stripped) or normalized in furniture_keys):
                     continue
                 lines.append(stripped)
     return norm('\n'.join(lines))

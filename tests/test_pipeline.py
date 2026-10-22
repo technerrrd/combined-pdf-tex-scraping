@@ -711,6 +711,33 @@ def test_rendered_text_removes_decimal_section_header_between_split_lines():
     assert norm('12.3. NIGHT SKY WATCHING') not in text
 
 
+def test_rendered_text_removes_wrapped_running_header_but_keeps_top_margin_body():
+    class Rect: height = 800
+    class Page:
+        rect = Rect()
+        def get_text(self, kind):
+            assert kind == 'dict'
+            return {'blocks': [
+                {'lines': [
+                    {'bbox': (30, 82, 400, 91), 'spans': [{'text': '9.1. Density'}]},
+                    {'bbox': (30, 95, 400, 99), 'spans': [{'text': 'of substances'}]},
+                ]},
+                {'lines': [
+                    {'bbox': (30, 107, 450, 116), 'spans': [{'text': 'Body paragraph remains here.'}]},
+                ]},
+                {'lines': [
+                    {'bbox': (30, 65, 450, 74), 'spans': [{'text': 'Unrecognized text near the top remains.'}]},
+                ]},
+            ]}
+
+    text = rendered_text([Page()], {'start_page': 1, 'end_page': 1}, [])
+
+    assert norm('9.1. Density') not in text
+    assert norm('of substances') not in text
+    assert norm('Body paragraph remains here.') in text
+    assert norm('Unrecognized text near the top remains.') in text
+
+
 def test_rendered_prose_validation_keeps_style_boundary_context():
     runs = [
         dict(kind='text', text='Clouds cause ', bold=False),

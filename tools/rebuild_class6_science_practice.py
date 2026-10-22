@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import rebuild_class8_science_practice as build
@@ -9,7 +10,7 @@ import rebuild_class8_science_practice as build
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKBOOK = ROOT / "Science-notes-links.xlsx"
-QUESTIONS_DIR = ROOT / "Class 6th Science"
+QUESTIONS_DIR = Path(os.environ.get('SCIENCE_INPUT_ROOT', ROOT)) / "Class 6th Science"
 CHAPTER_NUMBERS = (3, 4, 6, 7, 11, 12)
 MODULE = "Final-Science_Class6th"
 
@@ -70,7 +71,7 @@ build.source_hashes = source_hashes
 
 
 def update_manifest():
-    path = ROOT / "stage2" / "output" / MODULE / "manifest.json"
+    path = Path(os.environ.get('SCIENCE_OUTPUT_DIR', ROOT / "stage2" / "output")) / MODULE / "manifest.json"
     manifest = json.loads(path.read_text(encoding="utf-8"))
     manifest.update({
         "question_image_scale": 0.5,
@@ -80,6 +81,8 @@ def update_manifest():
             "question_files_committed": False,
             "source_hashes": source_hashes(),
             "adapter_sha256": build.sha256(Path(__file__)),
+            "question_layout_sha256": build.sha256(ROOT / 'stage2' / 'question_layout.py'),
+            "table_manifest_sha256": build.sha256(ROOT / 'tools' / 'science_table_manifest.py'),
             "shared_adapter_sha256": build.sha256(Path(build.__file__)),
             "convert_sha256": build.sha256(ROOT / "stage2" / "convert.py"),
             "scrape_chapters_sha256": build.sha256(ROOT / "stage0" / "scrape_chapters.py"),
@@ -94,8 +97,8 @@ if __name__ == "__main__":
         "--sheet", "Class 6th",
         "--module", MODULE,
         "--title", "Class 6th Science",
-        "--output-dir", str(ROOT / "stage2" / "output"),
-        "--cache-dir", str(ROOT / "input" / "scraped"),
+        "--output-dir", os.environ.get('SCIENCE_OUTPUT_DIR', str(ROOT / "stage2" / "output")),
+        "--cache-dir", os.environ.get('SCIENCE_CACHE_DIR', str(ROOT / "input" / "scraped")),
         "--offline",
     ]
     status = build.scrape_chapters.main(args)

@@ -336,7 +336,12 @@ TEX_PREAMBLE = r"""\documentclass[12pt,a4paper]{book}
 """
 
 def write_tex(elements, out_path: Path, media_dir: Path):
-    lines = [TEX_PREAMBLE]
+    if any(element['type'] == 'question' for element in elements):
+        from question_layout import RUNNING_HEADERS
+        preamble = TEX_PREAMBLE.replace(r'\begin{document}', RUNNING_HEADERS + '\n' + r'\begin{document}')
+    else:
+        preamble = TEX_PREAMBLE
+    lines = [preamble]
     in_enum = False
     list_stack = []
 
@@ -372,6 +377,11 @@ def write_tex(elements, out_path: Path, media_dir: Path):
             if lvl == 'chapter' and isinstance(chapter_number, int) and chapter_number > 0:
                 lines.append(f'\\setcounter{{chapter}}{{{chapter_number - 1}}}\n')
             lines.append(f'\\{cmd}{{{txt}}}\n')
+
+        elif t == 'question':
+            from question_layout import tex_content
+            open_enum()
+            lines.append('\\item ' + tex_content(el['content'], render_tex_segments, tex_escape))
 
         elif t == 'body':
             close_enum()
@@ -1007,6 +1017,12 @@ def copy_template_assets(template_dir: Path, out_dir: Path) -> None:
         structure,
         flags=re.DOTALL
     )
+    # Keep long running titles within their own header box, away from folios.
+    structure = structure.replace(r'\fancyhead[LO]{\rightmark}',
+                                  r'\fancyhead[LO]{\parbox[b]{.88\textwidth}{\raggedright\rightmark}}')
+    structure = structure.replace(r'\fancyhead[RE]{\leftmark}',
+                                  r'\fancyhead[RE]{\parbox[b]{.88\textwidth}{\raggedleft\leftmark}}')
+    structure += '\n' + r'\setlength{\headheight}{32pt}' + '\n'
     (out_dir / 'structure.tex').write_text(structure, encoding='utf-8')
 
 
@@ -1080,6 +1096,10 @@ def write_lyx(elements, out_path: Path, media_dir: Path, template_dir: Path = No
             lines.append(f'\\begin_layout {layout}\n')
             lines.append(render_lyx_segments(el.get('segments', [(el['text'], False)])) + '\n')
             lines.append('\\end_layout\n\n')
+
+        elif t == 'question':
+            from question_layout import lyx_question
+            lines.append(lyx_question(el['content'], render_lyx_segments, tex_escape))
 
         elif t == 'body':
             close_enum()

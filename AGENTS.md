@@ -33,6 +33,8 @@
 
 ## Handoff maintenance
 
+- Science question editions use regular-weight native numbered questions and alphabetic nested case parts. Omit case-only trailing mark labels and standalone OR markers by explicit user direction, retaining them in the audit. Give each case part one full-width answer rule per supplied mark (one if unmarked). Convert only reviewed, SHA-256-matched table pictures to native TeX/LyX tables, preserving all cells and original media. This specific exception supersedes source-label preservation for these case markers.
+
 Update HANDOFF.md after meaningful work and whenever a handoff is requested, including:
 
 - Current objective and branch
@@ -50,6 +52,7 @@ When editing CLAUDE.md, follow its version increment rule.
 - Preserve previous output on every failure; do not introduce a partial-success mode.
 - Keep URL-keyed caches validated and replace them atomically.
 - Never guess reference chapter mappings or silently flatten unsupported equations.
+- Science worksheet cell/paragraph text alone omits OMML; use the audited worksheet extractor, retain supplied superscripts/arrows, and fail on unsupported math. Review full math-bearing paragraphs, not only Word text runs.
 - Run offline regressions after relevant changes and compiler integration tests after parser/writer/build changes.
 - Record actual platform test results separately from configured CI jobs; do not claim unexecuted CI passed.
 - Maintain backward compatibility with legacy DOCX segments and preserve the fallback scripts.

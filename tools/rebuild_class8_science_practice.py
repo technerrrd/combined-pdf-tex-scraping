@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections import Counter
 import hashlib
 import json
+import os
 from pathlib import Path
 import posixpath
 import re
@@ -27,9 +28,9 @@ from PIL import Image
 from convert import pick_scale
 
 WORKBOOK = ROOT / "Science-notes-links.xlsx"
-QUESTIONS_DIR = ROOT / "Class 8th Science"
+QUESTIONS_DIR = Path(os.environ.get('SCIENCE_INPUT_ROOT', ROOT)) / "Class 8th Science"
 CHAPTER_NUMBERS = (3, 4, 7, 8, 9, 10, 12)
-MODULE = "Science_Class8th"
+MODULE = "Final-Science_Class8th"
 
 
 def workbook_rows(path: Path, sheet_name: str):
@@ -205,11 +206,52 @@ def question_paths(chapter: int) -> tuple[Path, Path]:
 
 def row_question(row):
     number = int(row.cells[0].text.strip())
-    lines = [clean(line) for line in row.cells[1].text.splitlines() if clean(line)]
+    lines = [clean(line) for paragraph in row.cells[1].paragraphs
+             for line in worksheet_paragraph_text(paragraph).splitlines() if clean(line)]
     marks = row.cells[2].text.strip()
     if not lines:
         raise ValueError(f"Question {number} has no text")
     return number, lines, marks
+
+
+def worksheet_paragraph_text(paragraph):
+    """Retain supplied simple OMML in document order; reject unknown math."""
+    math_ns = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
+    superscripts = str.maketrans('0123456789+-=()', '⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾')
+
+    def math_text(node):
+        tag = node.tag.rsplit('}', 1)[-1]
+        if tag in {'rPr', 'sSupPr', 'ctrlPr'}:
+            return ''
+        if tag == 't':
+            return node.text or ''
+        if tag == 'sSup':
+            base = node.find('{' + math_ns + '}e')
+            exponent = node.find('{' + math_ns + '}sup')
+            if base is None or exponent is None:
+                raise ValueError('Incomplete worksheet OMML superscript')
+            power = math_text(exponent)
+            if not power or any(char not in '0123456789+-=()' for char in power):
+                raise ValueError('Unsupported worksheet OMML superscript: ' + power)
+            return math_text(base).replace('\u200b', '') + power.translate(superscripts)
+        if tag in {'oMath', 'oMathPara', 'e', 'sup', 'r'}:
+            return ''.join(math_text(child) for child in node)
+        raise ValueError('Unsupported worksheet OMML element: ' + tag)
+
+    def content(node):
+        if node.tag.startswith('{' + math_ns + '}'):
+            return math_text(node)
+        if node.tag == qn('w:t'):
+            return node.text or ''
+        if node.tag == qn('w:tab'):
+            return '\t'
+        if node.tag in {qn('w:br'), qn('w:cr')}:
+            return '\n'
+        if node.tag in {qn('w:pPr'), qn('w:rPr'), qn('w:drawing'), qn('w:pict')}:
+            return ''
+        return ''.join(content(child) for child in node)
+
+    return content(paragraph._element)
 
 
 def labeled_options(lines, question_number):
@@ -246,6 +288,17 @@ def source_pdf_audit(document: Document, pdf_path: Path) -> int:
             if len(target) >= 8:
                 checks.append((value, target))
     missing = [value for value, target in checks if not fuzzy_present(target, pdf_text)]
+    # Full math-bearing paragraphs must match exactly after layout normalization;
+    # run-only prose checks cannot detect a lost exponent or arrow.
+    for table in document.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    if paragraph._element.findall('.//{http://schemas.openxmlformats.org/officeDocument/2006/math}oMath'):
+                        value = worksheet_paragraph_text(paragraph)
+                        if compact(value) not in pdf_text:
+                            missing.append(value)
+                        checks.append((value, compact(value)))
     if missing:
         raise ValueError(
             f"{pdf_path.name}: {len(missing)} DOCX text fragments are absent from the supplied PDF: "
@@ -270,6 +323,12 @@ def paragraph_images(document: Document, paragraph, media_dir: Path, chapter: in
         filename = f"ch{chapter}_questions_{rid}.png"
         target = media_dir / filename
         media_dir.mkdir(parents=True, exist_ok=True)
+        original_filename = 'originals/' + f'ch{chapter}_questions_{rid}' + Path(str(part.partname)).suffix
+        original = media_dir / original_filename
+        original.parent.mkdir(parents=True, exist_ok=True)
+        if original.exists() and original.read_bytes() != part.blob:
+            raise ValueError('Original question media collision: ' + original_filename)
+        original.write_bytes(part.blob)
         with Image.open(BytesIO(part.blob)) as opened:
             rendered = opened.convert("RGB")
             if target.exists():
@@ -284,6 +343,7 @@ def paragraph_images(document: Document, paragraph, media_dir: Path, chapter: in
             "scale": base_scale * 0.5,
             "base_scale": base_scale,
             "sha256": hashlib.sha256(part.blob).hexdigest(),
+            "original_filename": original_filename,
         })
     return images
 
@@ -291,7 +351,7 @@ def paragraph_images(document: Document, paragraph, media_dir: Path, chapter: in
 def row_events(document: Document, row, media_dir: Path, chapter: int):
     events = []
     for paragraph in row.cells[1].paragraphs:
-        for line in paragraph.text.splitlines():
+        for line in worksheet_paragraph_text(paragraph).splitlines():
             line = clean(line)
             if line:
                 events.append(("text", line))
@@ -347,119 +407,156 @@ question_metadata = {}
 question_images = []
 
 
+def parse_case_events(events):
+    output = []
+    parts = []
+    removed_marks = []
+    omitted_or_count = 0
+    for kind, value in events:
+        if kind != 'text':
+            if parts:
+                raise ValueError('Case figure appears between subquestions; review source order')
+            output.append((kind, value))
+            continue
+        if value.strip().casefold() == 'or':
+            omitted_or_count += 1
+            continue
+        match = re.search(r'\s*\(\s*(\d+)\s*\)\s*$', value)
+        if match:
+            marks = int(match.group(1))
+            text = value[:match.start()].strip()
+            removed_marks.append({'source': value, 'marks': marks, 'display': text})
+            parts.append({'text': text, 'marks': marks, 'answer_lines': marks})
+        elif parts:
+            raise ValueError('Unmarked case content follows marked parts: ' + value)
+        else:
+            output.append((kind, value))
+    if not parts:
+        text_positions = [index for index, event in enumerate(output) if event[0] == 'text']
+        boundary = next((index for index in text_positions if 'answer the following:' in output[index][1].casefold()), None)
+        if boundary is None:
+            raise ValueError('Cannot identify case subquestions')
+        passage = output[:boundary + 1]
+        for kind, value in output[boundary + 1:]:
+            if kind != 'text':
+                raise ValueError('Unmarked case figure after question boundary')
+            parts.append({'text': value, 'marks': None, 'answer_lines': 1})
+        output = passage
+    output.append(('subquestions', parts))
+    return output, {'removed_marks': removed_marks, 'omitted_or_count': omitted_or_count,
+                    'case_part_count': len(parts)}
+
+
 def practice_elements(chapter: int, media_dir: Path):
+    from science_table_manifest import convert_table
     docx_path, pdf_path = question_paths(chapter)
     document = Document(docx_path)
     if len(document.tables) < 2:
-        raise ValueError(f"{docx_path.name} does not contain its question table")
+        raise ValueError(f'{docx_path.name} does not contain its question table')
     pdf_checks = source_pdf_audit(document, pdf_path)
     rows = [row for row in document.tables[1].rows if row.cells[0].text.strip().isdigit()]
-    numbers = [int(row.cells[0].text.strip()) for row in rows]
-    if numbers != list(range(1, len(numbers) + 1)):
-        raise ValueError(f"Chapter {chapter}: question rows are not contiguous: {numbers}")
-
-    result = [{"type": "heading", "level": "section", "text": "Practice Questions",
-               "page_break_before": True}]
+    if [int(row.cells[0].text.strip()) for row in rows] != list(range(1, len(rows) + 1)):
+        raise ValueError('Question rows are not contiguous')
+    class_number = 6 if '6th' in QUESTIONS_DIR.name else 8
+    result = [dict(type='heading', level='section', text='Practice Questions', page_break_before=True)]
     expected = []
-    current_heading = None
-    block_number = 0
     type_counts = Counter()
-    rendered_item_counts = Counter()
+    rendered_counts = Counter()
+    current_heading = None
     local_images = []
-
-    def ensure_heading(title):
-        nonlocal current_heading, block_number
-        if not title:
-            raise ValueError(f"Chapter {chapter}: unsupported question type")
-        if current_heading != title:
-            result.append(heading(title))
-            expected.append(title)
-            current_heading = title
-            block_number = 0
-
-    def add_source_body(display, source, bold=False, page_break_before=False):
-        result.append(body(display, bold, page_break_before))
-        source = clean(source)
-        if source:
-            expected.append(source)
-
-    def add_writing_lines(count):
-        for _ in range(count):
-            result.append(body("______________________________________________"))
-
-    def add_true_false(display, source):
-        result.append({"type": "true_false", "segments": [(clean(display), True)]})
-        expected.append(clean(source))
-
+    tables = []
+    cases = []
+    answer_line_count = 0
     for row in rows:
         number, lines, marks = row_question(row)
         title = classify_question(lines, marks, number)
-        ensure_heading(title)
+        if not title:
+            raise ValueError('Unsupported question type')
+        if title != current_heading:
+            result.append(heading(title))
+            expected.append(title)
+            current_heading = title
         type_counts[title] += 1
-        events = row_events(document, row, media_dir, chapter)
-        images = [value for kind, value in events if kind == "image"]
-        local_images.extend(images)
-
-        if title in {"Multiple Choice Questions", "Assertion and Reason"}:
-            question_lines, options = labeled_options(lines, number)
-            if title == "Assertion and Reason":
-                if len(question_lines) < 2 or not question_lines[1].casefold().startswith("reason (r):"):
-                    raise ValueError(f"Chapter {chapter} question {number}: incomplete assertion/reason pair")
-            prompt = " ".join(question_lines)
-            result.append({
-                "type": "mcq",
-                "text": prompt,
-                "options": options,
-                "pre_option_images": images,
-            })
-            expected.extend([*question_lines, *options])
-            rendered_item_counts[title] += 1
-            continue
-
-        if title in {"True or False", "Fill in the Blanks"}:
-            add_source_body(lines[0], lines[0], bold=True)
-            for item_number, line in enumerate(lines[1:], start=1):
-                display = f"{item_number}. {line}"
-                if title == "True or False":
-                    add_true_false(display, line)
+        raw_events = row_events(document, row, media_dir, chapter)
+        events = []
+        for kind, value in raw_events:
+            if kind == 'image':
+                converted = convert_table(value, class_number, chapter)
+                if converted['type'] == 'table':
+                    tables.append(converted)
+                    events.append(('table', converted))
                 else:
-                    add_source_body(display, line, bold=True)
-            rendered_item_counts[title] += len(lines) - 1
-            continue
-
-        block_number += 1
-        first_text = True
-        for kind, value in events:
-            if kind == "image":
-                result.append(value)
-                continue
-            if first_text:
-                add_source_body(f"{block_number}. {value}", value, bold=True)
-                first_text = False
+                    local_images.append(value)
+                    events.append((kind, value))
             else:
-                add_source_body(value, value, bold=True)
-        if first_text:
-            raise ValueError(f"Chapter {chapter} question {number}: no visible text")
-        rendered_item_counts[title] += 1
-        if title in {"Very Short Questions", "Short Questions"}:
-            add_writing_lines(1)
-        elif title in {"Long Questions", "Very Long Questions", "Case-Based Questions"}:
-            add_writing_lines(3)
-
-    for image in local_images:
-        if abs(image["scale"] / image["base_scale"] - 0.5) > 1e-9:
-            raise ValueError(f"Chapter {chapter}: question image is not half-scale")
-    question_images.extend({"chapter": chapter, **image} for image in local_images)
-    metadata = {
-        "source_docx": docx_path.name,
-        "source_pdf": pdf_path.name,
-        "source_rows": len(rows),
-        "rendered_items": sum(rendered_item_counts.values()),
-        "counts_by_type": dict(type_counts),
-        "rendered_items_by_type": dict(rendered_item_counts),
-        "source_figures": len(local_images),
-        "docx_pdf_prose_checks": pdf_checks,
-    }
+                events.append((kind, value))
+        if title in {'Multiple Choice Questions', 'Assertion and Reason'}:
+            prompt_lines, options = labeled_options(lines, number)
+            if title == 'Assertion and Reason' and (len(prompt_lines) < 2 or not prompt_lines[1].casefold().startswith('reason (r):')):
+                raise ValueError(f'Chapter {chapter} question {number}: incomplete assertion/reason pair')
+            content = [body(' '.join(prompt_lines))]
+            content.extend(value for kind, value in events if kind in {'image', 'table'})
+            content.append({'type': 'options', 'values': options})
+            result.append({'type': 'question', 'content': content})
+            expected.extend(prompt_lines + options)
+            rendered_counts[title] += 1
+            continue
+        if title in {'True or False', 'Fill in the Blanks'}:
+            result.append(body(lines[0]))
+            expected.append(lines[0])
+            for line in lines[1:]:
+                content = [body(line)]
+                if title == 'Fill in the Blanks':
+                    content[0]['ragged_right'] = True
+                if title == 'True or False':
+                    content.append({'type': 'answer_lines', 'count': 1})
+                    answer_line_count += 1
+                result.append({'type': 'question', 'content': content})
+                expected.append(line)
+                rendered_counts[title] += 1
+            continue
+        if title == 'Case-Based Questions':
+            events, audit = parse_case_events(events)
+            cases.append({'source_question': number, **audit})
+        elif len(events) > 2:
+            last_asset = max((index for index, (kind, value) in enumerate(events) if kind != 'text'), default=0)
+            trailing = events[last_asset + 1:]
+            if len(trailing) > 1 and all(kind == 'text' and value.endswith('?') for kind, value in trailing):
+                parts = [{'text': value, 'marks': None, 'answer_lines': 1} for kind, value in trailing]
+                events = events[:last_asset + 1] + [('subquestions', parts)]
+        content = []
+        for kind, value in events:
+            if kind == 'text':
+                content.append(body(value))
+                expected.append(value)
+            elif kind == 'subquestions':
+                items = []
+                for part in value:
+                    expected.append(part['text'])
+                    count = part['answer_lines']
+                    items.append({'content': [body(part['text']), {'type': 'answer_lines', 'count': count}]})
+                    answer_line_count += count
+                content.append({'type': 'subquestions', 'items': items})
+            else:
+                content.append(value)
+        if title != 'Case-Based Questions' and not any(kind == 'subquestions' for kind, value in events):
+            count = 1 if title in {'Very Short Questions', 'Short Questions'} else 3 if title in {'Long Questions', 'Very Long Questions'} else 0
+            if count:
+                content.append({'type': 'answer_lines', 'count': count})
+                answer_line_count += count
+        result.append({'type': 'question', 'content': content})
+        rendered_counts[title] += 1
+    for table in tables:
+        expected.extend(cell for row in table['rows'] for cell in row if cell and not cell.isdigit())
+    expected_table_counts = {6: {3: 2, 4: 1, 6: 2, 7: 3, 11: 2, 12: 2}, 8: {3: 4, 4: 1}}
+    if len(tables) != expected_table_counts[class_number].get(chapter, 0):
+        raise ValueError(f'Chapter {chapter}: reviewed table inventory changed')
+    question_images.extend({'chapter': chapter, **image} for image in local_images)
+    metadata = dict(source_docx=docx_path.name, source_pdf=pdf_path.name,
+                    source_rows=len(rows), rendered_items=sum(rendered_counts.values()),
+                    counts_by_type=dict(type_counts), rendered_items_by_type=dict(rendered_counts),
+                    source_figures=len(local_images), docx_pdf_prose_checks=pdf_checks,
+                    converted_tables=tables, cases=cases, answer_line_count=answer_line_count)
     return result, expected, metadata
 
 
@@ -513,6 +610,26 @@ def verify_practice_before_publish(chapters, directory, module, outputs):
     for label, path in outputs.items():
         with pymupdf.open(path) as pdf:
             ranges = map_pdf(pdf, chapters, generated=True)
+            for chapter, page_range in zip(chapters, ranges):
+                chapter_pages = list(range(page_range['start_page'] - 1, page_range['end_page']))
+                numeric_words = Counter(word[4] for page_number in chapter_pages
+                                        for word in pdf[page_number].get_text('words'))
+                expected_numeric = Counter(cell for table in question_metadata[chapter['num']]['converted_tables']
+                                           for row in table['rows'] for cell in row if cell.isdigit())
+                for cell, count in expected_numeric.items():
+                    if numeric_words[cell] < count:
+                        raise ValueError(f'{label}: table value {cell!r} appears {numeric_words[cell]} times; expected at least {count}')
+                placed = [info['digest'] for page_number in range(page_range['start_page'] - 1, page_range['end_page'])
+                          for info in pdf[page_number].get_image_info(hashes=True)]
+                cursor = 0
+                for image in question_images:
+                    if image['chapter'] != chapter['num']:
+                        continue
+                    digest = pymupdf.Pixmap(directory / 'media' / image['filename']).digest
+                    try:
+                        cursor = placed.index(digest, cursor) + 1
+                    except ValueError as error:
+                        raise ValueError(f'{label}: lost or reordered question figure {image["filename"]}') from error
             rendered_by_output[label] = {
                 chapter["num"]: scrape_chapters.rendered_text(
                     pdf,
@@ -538,7 +655,30 @@ def verify_practice_before_publish(chapters, directory, module, outputs):
 
     tex = (directory / f"{module}.tex").read_text(encoding="utf-8")
     lyx = (directory / f"{module}.lyx").read_text(encoding="utf-8")
+    expected_lines = sum(item['answer_line_count'] for item in question_metadata.values())
+    if tex.count(r'\rule{\linewidth}{0.3pt}') != expected_lines:
+        raise ValueError('TeX answer-line count differs from audited count')
+    if lyx.count('rule{\\backslash\nlinewidth}{0.3pt}') != expected_lines:
+        raise ValueError('LyX answer-line count differs from audited count')
+    for metadata in question_metadata.values():
+        for table in metadata['converted_tables']:
+            from question_layout import tex_content, lyx_content
+            import convert
+            if tex_content([table], convert.render_tex_segments, convert.tex_escape) not in tex:
+                raise ValueError('TeX table cells or ordering changed')
+            if lyx_content([table], convert.render_lyx_segments, convert.tex_escape) not in lyx:
+                raise ValueError('LyX native table cells or ordering changed')
+            reference = 'media/' + table['source_image']['filename']
+            if reference in tex or reference in lyx:
+                raise ValueError('Converted table picture is still rendered: ' + reference)
+            with Image.open(directory / reference) as original:
+                original.verify()
+            original_path = directory / 'media' / table['source_image']['original_filename']
+            if sha256(original_path) != table['source_image']['sha256']:
+                raise ValueError('Original table media hash differs from reviewed source')
     for image in question_images:
+        if abs(image['scale'] / image['base_scale'] - .5) > 1e-9:
+            raise ValueError('Question figure sizing factor changed')
         expected_tex = f"width={image['scale']}\\textwidth]{{media/{image['filename']}}}"
         expected_lyx = f"filename media/{image['filename']}"
         expected_lyx_width = f"width {int(round(image['scale'] * 100))}text%"
@@ -552,6 +692,10 @@ def verify_practice_before_publish(chapters, directory, module, outputs):
         "question_images": {"count": len(question_images), "scale_factor": 0.5},
         "source_issues": SOURCE_ISSUES,
         "source_hashes": source_hashes(),
+        "converted_table_count": sum(len(item['converted_tables']) for item in question_metadata.values()),
+        "case_part_count": sum(case['case_part_count'] for item in question_metadata.values() for case in item['cases']),
+        "omitted_or_count": sum(case['omitted_or_count'] for item in question_metadata.values() for case in item['cases']),
+        "answer_line_count": sum(item['answer_line_count'] for item in question_metadata.values()),
     }
     return result
 
@@ -569,7 +713,7 @@ def git_commit() -> str:
 
 
 def update_manifest():
-    path = ROOT / "stage2" / "output" / MODULE / "manifest.json"
+    path = Path(os.environ.get('SCIENCE_OUTPUT_DIR', ROOT / "stage2" / "output")) / MODULE / "manifest.json"
     manifest = json.loads(path.read_text(encoding="utf-8"))
     manifest.update({
         "question_image_scale": 0.5,
@@ -578,6 +722,8 @@ def update_manifest():
             "git_dirty": True,
             "source_hashes": source_hashes(),
             "adapter_sha256": sha256(Path(__file__)),
+            "question_layout_sha256": sha256(ROOT / 'stage2' / 'question_layout.py'),
+            "table_manifest_sha256": sha256(ROOT / 'tools' / 'science_table_manifest.py'),
             "convert_sha256": sha256(ROOT / "stage2" / "convert.py"),
             "scrape_chapters_sha256": sha256(ROOT / "stage0" / "scrape_chapters.py"),
         },
@@ -591,8 +737,8 @@ if __name__ == "__main__":
         "--sheet", "Class 8th",
         "--module", MODULE,
         "--title", "Class 8th Science",
-        "--output-dir", str(ROOT / "stage2" / "output"),
-        "--cache-dir", str(ROOT / "input" / "scraped"),
+        "--output-dir", os.environ.get('SCIENCE_OUTPUT_DIR', str(ROOT / "stage2" / "output")),
+        "--cache-dir", os.environ.get('SCIENCE_CACHE_DIR', str(ROOT / "input" / "scraped")),
         "--offline",
     ]
     status = scrape_chapters.main(args)

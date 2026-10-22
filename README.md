@@ -177,6 +177,31 @@ outside Git. Use `tools/audit_class6_science.py` for the read-only source audit.
 All three tools derive provenance from the current checkout and contain no
 machine-specific sibling-checkout paths.
 
+Science prompts use regular-weight native numbered lists. Case subquestions use
+native `(a)`, `(b)`, `(c)` labels and full-width answer rules: one per supplied
+mark, or one for an unmarked part. By explicit author direction, case-only mark
+suffixes and standalone `OR` are omitted from display and retained in the audit.
+Reviewed table pictures are replaced with editable native tables in both formats;
+their original image hashes, cell matrices, and empty cells remain in the report.
+A changed reviewed table image stops the build for review.
+
+Worksheet extraction retains supplied simple OMML runs and numeric superscripts
+in source order, including cubic units and food-chain arrows. Unsupported OMML
+fails for review. Math-bearing paragraphs are included in paired source-PDF
+checks and compiled question-content checks. Long running headers are boxed
+separately from page numbers instead of being allowed to overlap them.
+
+`SCIENCE_INPUT_ROOT`, `SCIENCE_CACHE_DIR`, and `SCIENCE_OUTPUT_DIR` optionally select
+the supplied source root, validated cache, and candidate output location. Run
+`tools/render_science_review.py` to render the candidates for visual acceptance.
+`tools/package_science_lyx.py BOOK_DIR ZIP_PATH` produces a verified portable ZIP
+containing the main LyX document and all local media and theme dependencies.
+Final ZIPs require visual acceptance; explicitly labelled review-pending ZIPs
+may include `DELIVERY-STATUS.txt` and are not approved releases.
+`tools/publish_science_corrections.py STAGING WORKSPACE --classes 8` publishes
+only an accepted Class 8 correction to the local final folder and configurable
+external release directory, preserving other classes and archiving the old book.
+
 Publication uses an exclusive lock. If interrupted during publication, inspect
 `.<module>.publish.lock` and staging directory before removing the stale lock or
 restoring the previous directory. A previous snapshot is not retained after a
