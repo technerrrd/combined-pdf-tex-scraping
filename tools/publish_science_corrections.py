@@ -25,7 +25,7 @@ def main():
     parser.add_argument('staging', type=Path)
     parser.add_argument('workspace', type=Path)
     parser.add_argument('--release-dir', type=Path, default=Path('D:/Science-Book-Releases'))
-    parser.add_argument('--classes', type=int, nargs='+', choices=(6, 8), default=[6, 8])
+    parser.add_argument('--classes', type=int, nargs='+', choices=(6, 7, 8), default=[6, 8])
     args = parser.parse_args()
     staging, workspace, release = args.staging.resolve(), args.workspace.resolve(), args.release_dir.resolve()
     tag = datetime.now().strftime('%Y%m%d-%H%M%S')

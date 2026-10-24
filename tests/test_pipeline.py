@@ -638,6 +638,12 @@ def test_typographic_dashes_match_tex_punctuation():
     assert norm(r'Water boils at 100 \circ C') == norm('Water boils at 100 °C')
     assert norm('Saptaṛiṣhi, Dhruva tārā, Sūrya') == norm('Saptar.is.hi Dhruva t�ar�a S�urya')
     assert norm('Saptaṛiṣhi and Sūrya') == norm('Saptar.is.hi and S¯urya')
+
+
+def test_numeric_range_line_wrap_preserves_hyphen_but_words_still_join():
+    assert norm('1629-\n1695') == norm('1629-1695')
+    assert norm('books-\nalmost') == norm('booksalmost')
+    assert norm('1629-\n1695') != norm('16291695')
     assert norm('Bījagaṇita and bīja') == norm('B¯ıjagan. ita and b¯ıja')
     assert norm('Re\x01ectional \x02gure on the \x03oor') == norm('Reflectional figure on the floor')
 

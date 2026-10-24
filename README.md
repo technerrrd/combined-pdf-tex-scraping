@@ -1,5 +1,16 @@
 # Reliable note generation
 
+For the supplied Class 7 Science question edition (Chapters 4–9), run
+`python tools/rebuild_class7_science_practice.py`. Set `SCIENCE_INPUT_ROOT` to
+the parent of `Class 7th Science`, `SCIENCE_CACHE_DIR` to the validated offline
+cache, and `SCIENCE_OUTPUT_DIR` to a staging parent. This edition generates
+only LyX and its PDF, as requested. Its twelve native matching tables, three
+question diagrams and supplied OMML are preserved. Complete visual acceptance
+before publishing the staged book or creating a final portable package.
+
+The primary CLI also accepts `--lyx-only`; the normal default still generates
+and validates both formats. LyX-exported LaTeX is a compilation intermediate.
+
 The primary pipeline turns EduRev chapter links into editable TeX and themed LyX,
 then compiles both to PDF. Output is published only after downloads, structure,
 compilation, and any requested reference-PDF checks pass.
@@ -171,10 +182,13 @@ the required one-time 0.5 scale to question figures:
 .venv/Scripts/python.exe tools/rebuild_class8_science_practice.py
 ```
 
-The Class 6 command requires the separately supplied question DOCX/PDF pairs in
-`Class 6th Science/`; those user inputs and `input/scraped/` remain intentionally
-outside Git. Use `tools/audit_class6_science.py` for the read-only source audit.
-All three tools derive provenance from the current checkout and contain no
+The supplied Science question DOCX/PDF pairs are tracked alongside the notes:
+Class 6 Chapters 3, 4, 6, 7, 11, 12; Class 7 Chapters 4–9; and the existing
+Class 8 sources. A fresh clone includes these originals. Validated offline
+HTML/image caches in `input/scraped/` still require separate transfer or fetching;
+generated outputs and downloads stay outside Git. Use
+`tools/audit_class6_science.py` for the read-only Class 6 source audit.
+The tools derive provenance from the current checkout and contain no
 machine-specific sibling-checkout paths.
 
 Science prompts use regular-weight native numbered lists. Case subquestions use

@@ -282,7 +282,7 @@ def test_unsupported_worksheet_omml_fails_closed(adapter):
     paragraph = Document().add_paragraph("Unknown: ")
     paragraph._p.append(OxmlElement("m:f"))
 
-    with pytest.raises(ValueError, match="Unsupported worksheet OMML element: f"):
+    with pytest.raises(ValueError, match="Incomplete worksheet OMML fraction"):
         adapter.worksheet_paragraph_text(paragraph)
 
 

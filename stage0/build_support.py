@@ -173,7 +173,7 @@ def compiler_python_environment(directory, environ=None, platform_name=None, pyt
     return environment, shim
 
 
-def compile_documents(directory, module, programs, diagnostics=None):
+def compile_documents(directory, module, programs, diagnostics=None, formats=('tex', 'lyx')):
     directory = Path(directory)
     current_platform = os.name
     outputs = {}
@@ -217,6 +217,8 @@ def compile_documents(directory, module, programs, diagnostics=None):
         export_text = export_text.replace('{' + directory.resolve().as_posix() + '/', '{')
         export_path.write_text(export_text, encoding='utf-8')
         for source, label in ((module + '.tex', 'tex'), (exported, 'lyx')):
+            if label not in formats:
+                continue
             job = module + '-' + label
             for iteration in range(1, 5):
                 command([programs['pdflatex'], '-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error',

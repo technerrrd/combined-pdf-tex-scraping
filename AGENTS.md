@@ -1,5 +1,7 @@
 # Project instructions
 
+- Class 7 Science Chapters 4–9 are explicitly requested as LyX-only, including its PDF and every-page review by `gpt-5.6-luna`. Use `tools/rebuild_class7_science_practice.py`; do not require a separate direct-TeX edition for this scope. LyX-exported LaTeX remains a compiler intermediate. Preserve nested native worksheet tables and literal OMML fractions.
+
 - Class 6 true/false statements use a short right-aligned answer blank beside each numbered statement in both formats; never give them full-width written-answer rules.
 
 - Class 6 Science uses these written-answer headings: Very Short Answer Questions, Short Question Answers, Descriptive Answer Questions, and Long Answer Questions. Allocate one answer rule per supplied mark (1/2/3/5 respectively); retain individual supplied case-part marks and the existing MCQ, fill-in, and supplied-answer exceptions.
@@ -10,6 +12,7 @@
 - Read CLAUDE.md for the inherited pipeline and formatting specifications. Preserve those rules unless the user changes them; flag discrepancies between the notes and implementation.
 - Use repository-relative paths in documentation.
 - Preserve user changes and avoid committing inputs, generated outputs, environments, logs, or secrets.
+- User explicitly authorized tracking the supplied Class 6 and Class 7 Science question DOCX/PDF pairs on 2026-10-24. These chapter sources join the intentional tracked references; keep outputs, caches, unrelated documents and desktop.ini out of Git.
 - Publish combined Class 6-8 releases outside the checkout. The Windows default is `D:\Science-Book-Releases`; keep the destination configurable and record the source Git commit and dirty state.
 - The root-level `Class 6th Science/`, `Class 7th Science/`, `Class 8th Science/`, and `Science-notes-links.xlsx` are intentional tracked Linux test references; do not treat them as generated output.
 - Commit and push only when authorized by the user; standing authorization for automatic pushes has not been established.

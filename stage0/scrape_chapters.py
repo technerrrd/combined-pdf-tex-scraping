@@ -33,6 +33,8 @@ def arguments(argv=None):
     parser.add_argument('--coverage-threshold', type=float, default=.95)
     parser.add_argument('--image-scale', type=float, default=.75,
                         help='Multiplier applied after page-fit sizing; range (0,1], default 0.75')
+    parser.add_argument('--lyx-only', action='store_true',
+                        help='Generate and validate only LyX and its compiled PDF')
     return parser.parse_args(argv)
 
 
@@ -130,7 +132,8 @@ def check_structure(chapters, directory, module, outputs):
     from build_support import ValidationError, validate_image
     from validate_against_pdf import map_pdf, norm
     import pymupdf
-    tex = (directory / (module + '.tex')).read_text(encoding='utf-8')
+    tex_path = directory / (module + '.tex')
+    tex = tex_path.read_text(encoding='utf-8') if 'tex' in outputs else None
     lyx = (directory / (module + '.lyx')).read_text(encoding='utf-8')
     stats = {}
     prose = {}
@@ -152,7 +155,7 @@ def check_structure(chapters, directory, module, outputs):
                 asset = directory / 'media' / e['filename']
                 validate_image(asset.read_bytes())
                 images[ch['num']].append(pymupdf.Pixmap(asset.read_bytes()).digest)
-                if 'media/' + e['filename'] not in tex or 'media/' + e['filename'] not in lyx:
+                if (tex is not None and 'media/' + e['filename'] not in tex) or 'media/' + e['filename'] not in lyx:
                     raise ValidationError(f'Missing image reference: {e["filename"]}')
             segments = []
             if 'segments' in e: segments.append(e['segments'])
@@ -167,19 +170,22 @@ def check_structure(chapters, directory, module, outputs):
                     prose[ch['num']].extend(
                         chunk for chunk in prose_chunks(runs) if len(norm(chunk)) >= 3)
                 rendered = inline.tex(runs)
-                if rendered and rendered not in tex: raise ValidationError('Generated TeX lost source content')
+                if tex is not None and rendered and rendered not in tex: raise ValidationError('Generated TeX lost source content')
+                if inline.lyx(runs) not in lyx: raise ValidationError('Generated LyX lost source content')
                 for s in inline.adapt(runs):
                     if s['kind'] == 'math' and inline.lyx([s]) not in lyx and s['text'].replace('\\', '\\backslash\n') not in lyx:
                         raise ValidationError('Generated LyX lost an equation')
     expected = [(r'\chapter{', len(chapters)), (r'\begin{tabular}', stats.get('table', 0))]
     for marker, count in expected:
-        if tex.count(marker) < count: raise ValidationError(f'Missing structural element: {marker}')
+        if tex is not None and tex.count(marker) < count: raise ValidationError(f'Missing structural element: {marker}')
+    if lyx.count('\\begin_layout Chapter\n') < len(chapters):
+        raise ValidationError('Generated LyX lost chapters')
     for level, count in heading_counts.items():
         layout = {'section':'Section', 'subsection':'Subsection', 'subsubsection':'Subsubsection'}[level]
-        if tex.count('\\' + level + '{') < count or lyx.count('\\begin_layout ' + layout + '\n') < count:
+        if (tex is not None and tex.count('\\' + level + '{') < count) or lyx.count('\\begin_layout ' + layout + '\n') < count:
             raise ValidationError(f'Missing heading structure: {level}')
     if lyx.count('\\begin_inset Tabular') < stats.get('table', 0): raise ValidationError('Generated LyX lost tables')
-    if tex.count('\\item ') < list_items or sum(lyx.count('\\begin_layout ' + name + '\n') for name in ('Itemize', 'Enumerate')) < list_items:
+    if (tex is not None and tex.count('\\item ') < list_items) or sum(lyx.count('\\begin_layout ' + name + '\n') for name in ('Itemize', 'Enumerate')) < list_items:
         raise ValidationError('Generated document lost list items')
     if stats.get('list') and not any(x in lyx for x in ('\\begin_layout Itemize', '\\begin_layout Enumerate')):
         raise ValidationError('Generated LyX lost lists')
@@ -347,7 +353,9 @@ def build(args):
                 except (BuildError, ValueError, OSError) as exc:
                     report['errors'].append(f"Chapter {ch['num']} {ch['formula_url']}: {exc}")
         if report['errors']: raise BuildError('Selected chapters are incomplete')
-        convert.write_tex(combined, staging / (module + '.tex'), media)
+        lyx_only = getattr(args, 'lyx_only', False)
+        if not lyx_only:
+            convert.write_tex(combined, staging / (module + '.tex'), media)
         convert.write_lyx(combined, staging / (module + '.lyx'), media, template_dir=convert.TEMPLATE_DIR)
         convert.copy_template_assets(convert.TEMPLATE_DIR, staging)
         import inline_content as inline
@@ -356,8 +364,9 @@ def build(args):
             r'\begin{document}',
             r'\usepackage{hyperref}' + '\n' + r'\begin{document}' + '\n' +
             r'\title{' + inline.escape(args.title or module) + '}' + '\n' +
-            r'\author{V.L Memorial Public School}' + '\n' + r'\date{}\maketitle')
-        tex_path.write_text(source, encoding='utf-8')
+            r'\author{V.L Memorial Public School}' + '\n' + r'\date{}\maketitle') if not lyx_only else None
+        if source is not None:
+            tex_path.write_text(source, encoding='utf-8')
         lyx_path = staging / (module + '.lyx')
         source = lyx_path.read_text(encoding='utf-8')
         source = source.replace('\\end_preamble', '\\usepackage{amsmath}\n\\end_preamble', 1)
@@ -366,7 +375,10 @@ def build(args):
         source = source.replace('Large Class 7', 'Large \\backslash\nstrut ')
         lyx_path.write_text(source, encoding='utf-8')
         report['compiler_diagnostics'] = []
-        outputs = compile_documents(staging, module, programs, report['compiler_diagnostics'])
+        if lyx_only:
+            outputs = compile_documents(staging, module, programs, report['compiler_diagnostics'], formats=('lyx',))
+        else:
+            outputs = compile_documents(staging, module, programs, report['compiler_diagnostics'])
         report['structure'] = check_structure(chapters, staging, module, outputs)
         if args.pdf:
             report['reference_status'] = 'failed'

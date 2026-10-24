@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-10-24 authorized source migration checkpoint
+
+- User explicitly authorized adding and pushing Class 6 and Class 7 Science question sources with the completed Class 7 implementation/context. Added 24 unchanged DOCX/PDF files: Class 6 Chapters 3, 4, 6, 7, 11, 12 and Class 7 Chapters 4–9. Source and copied SHA-256 hashes match. No unrelated invoice, generated output, cache, log, environment or secret is included.
+- The maintained checkout is on `main`; remote is `https://github.com/technerrrd/combined-pdf-tex-scraping.git`. Fetch confirmed local and remote match before this checkpoint. Includes the already-validated Class 7 LyX-only adapter, shared native-table/fraction/wrapping changes, tests and handoffs. Prior validation: 113 offline passes, real compiler integration and all 124 final PDF pages reviewed by Luna 5.6; no rebuild needed for copying unchanged sources.
+- Updated source-tracking provenance and README migration instructions. Original questions now travel through Git; validated offline HTML/image caches and final generated books still need separate transfer. Added a desktop.ini ignore rule.
+- Fresh checkpoint validation using the newly copied tracked-layout inputs: 113 offline tests passed, 1 integration test deselected in 14.26 seconds; staged whitespace checks passed. Earlier real compiler and full-page review results remain recorded above. No unnecessary PDF rebuild was performed.
+- Google Drive inserted desktop.ini files into Git internals, causing `fatal: bad object refs/desktop.ini`. Moved only those 204 Windows metadata files into recoverable outer `tmp/git-desktop-metadata-backup-20261024/`; no Git objects or real references were changed. Fetch then succeeded. Keep Google Drive from recreating metadata inside `.git`.
+- This is one-off commit/push authorization, not standing permission. Verify final commit/push from Git history; earlier no-push sections are historical.
+
+## 2026-10-24 Class 7 full review completed and local release accepted
+
+- Completed the user-requested `gpt-5.6-luna` visual review of all 124 final LyX PDF pages. Earlier pages 1–84 were verified against freshly rendered, byte-identical PNGs; new reviewers inspected pages 85–98, 99–111 and 112–124. Every page hash and the PDF hash passed final acceptance. Records are under outer `tmp/s7review/`; merged acceptance and renders are under `tmp/s7finalreview/`.
+- Final book is `stage2/output/Final-Science_Class7th/` in the outer export. Its LyX PDF has zero compiler diagnostics; PDF SHA-256 is `c83b434477b9124b2437fa97abec384cd636361a8677c3a7f8e6c7bd2a6fad8e`. All 19 source hashes remain unchanged. The 10.39pt fill-in overflow was fixed by honoring the existing ragged-right setting; changed pages 42, 43 and 124 were independently rechecked.
+- Accepted portable download is outer `stage2/downloads/Final-Class-7-Science-LyX.zip`: 161 book files plus OPEN-ME, CRC/member hashes verified, SHA-256 `4094b5cb0dd77deaf11cebc0a307a6e90d304bd1c5024257bd9fce4c888423af`. Extract the entire ZIP. The older review-pending ZIP is superseded.
+- Layout/readability passed. Source spacing issues on pages 93 and 98 were confirmed against cached HTML and the original question DOCX, preserved and recorded in the acceptance report; normal pendulum word hyphenation is not a defect. Chapter 5's original typo and the six pairs of generic matching prompts are also recorded without changing source wording.
+- Prior final implementation tests by Luna: 113 offline passed, one integration test deselected; real compiler integration passed its fixture, reference-rejection and previous-output-preservation checks. This review-only turn reused the accepted compiled PDF; no unnecessary rebuild/test rerun. Windows denied the sandbox output-folder rename; the approved native rename succeeded. No external release, commit or push performed; maintained `main` remains dirty.
+
+## 2026-10-23 Class 7 LyX-only build in progress
+
+- User requested Class 7 Science Chapters 4–9, restricted generation/testing to LyX and its PDF, and authorized every-page testing by `gpt-5.6-luna`. Maintained branch is `main` at `f709552fe57688adf2f31e5a4944136a85217fd2`; no commit/push requested.
+- New `tools/rebuild_class7_science_practice.py` uses renamed headings, marks-based rules, regular native enumeration, nested cases and short true/false blanks. Configure `SCIENCE_INPUT_ROOT`, `SCIENCE_CACHE_DIR`, and `SCIENCE_OUTPUT_DIR` for separately supplied inputs/caches. Chapter 10 notes exist but no question pair was supplied; the requested question edition covers 4–9.
+- Added opt-in `--lyx-only`; default two-format builds remain intact. LyX-exported LaTeX is only a compiler intermediate. Native nested worksheet tables and the literal Chapter 8 OMML speed fraction now remain editable. The two squared-unit superscripts and three diagrams are retained. Numeric year-range hyphens split by PDF line wraps no longer produce false missing-content failures.
+- Candidate `tmp/s7/Final-Science_Class7th/` in the outer export passes the real LyX compiler and source/structure checks: 124 pages, 364 source rows, 449 rendered items, 12 native tables, 72 case parts, 18 omitted OR markers, 530 answer rules, and 1,385 paired DOCX/PDF checks. A 10.39pt fill-in overfull warning requires visual inspection. Full-page review, final tests and publication are pending.
+- Smaller-model initial offline tests: 111 passed, 1 integration case deselected. The older venv needs bundled openpyxl on PYTHONPATH. Sandbox LyX export exits with empty logs; compiler execution with the installed Windows user profile outside the sandbox succeeds. No Linux/CI result claimed for this work.
+
 ## 2026-10-23 authorized Git checkpoint
 
 - User explicitly authorized committing and pushing the completed Class 6 updates to the configured `origin/main` (`technerrrd/combined-pdf-tex-scraping`). This is one-off authorization.

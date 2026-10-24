@@ -85,6 +85,7 @@ def workbook_rows(path: Path, sheet_name: str):
         headers = tuple(rows[0].get(col, "").strip() for col in "ABCDE")
         if headers[:2] in {
             ("Chapter", "Chapter Links"),
+            ("Chapter", "Chapter-links"),
             ("Chapters", "Science Links"),
         } and not any(headers[2:]):
             chapters = []
@@ -177,11 +178,25 @@ def heading(text: str, level="subsection"):
 
 
 def compact(value: str) -> str:
+    value = worksheet_audit_text(value)
     value = value.translate({1: "fl", 2: "fi", 3: "fl"})
     value = value.replace("ﬂ", "fl").replace("ﬁ", "fi").replace("ﬀ", "ff")
     value = unicodedata.normalize("NFKD", value)
     value = "".join(ch for ch in value if unicodedata.category(ch) != "Mn")
     return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def worksheet_audit_text(value):
+    """Remove only syntax introduced for a literal supplied OMML fraction."""
+    value = re.sub(r'\\(?:frac|text)\b', '', value)
+    return value.replace(r'\(', '').replace(r'\)', '').replace('{', '').replace('}', '')
+
+
+def worksheet_audit_fragments(value):
+    # A source PDF may extract its stacked fraction after the entire paragraph.
+    # Check both literal operands and surrounding prose independently in that case.
+    pattern = r'\\\(\\frac\{\\text\{([^{}]+)\}\}\{\\text\{([^{}]+)\}\}\\\)'
+    return [part for part in re.split(pattern, value) if compact(part)]
 
 
 def fuzzy_present(target: str, source: str) -> bool:
@@ -226,10 +241,19 @@ def worksheet_paragraph_text(paragraph):
 
     def math_text(node):
         tag = node.tag.rsplit('}', 1)[-1]
-        if tag in {'rPr', 'sSupPr', 'sSubPr', 'ctrlPr'}:
+        if tag in {'rPr', 'sSupPr', 'sSubPr', 'ctrlPr', 'fPr'}:
             return ''
         if tag == 't':
             return node.text or ''
+        if tag == 'f':
+            numerator = node.find('{' + math_ns + '}num')
+            denominator = node.find('{' + math_ns + '}den')
+            if numerator is None or denominator is None:
+                raise ValueError('Incomplete worksheet OMML fraction')
+            values = [math_text(child) for child in (numerator, denominator)]
+            if any(not value or not re.fullmatch(r'[A-Za-z0-9 .+-]+', value) for value in values):
+                raise ValueError('Unsupported worksheet OMML fraction content')
+            return r'\(\frac{\text{' + values[0] + r'}}{\text{' + values[1] + r'}}\)'
         if tag in {'sSup', 'sSub'}:
             is_super = tag == 'sSup'
             script_kind = 'superscript' if is_super else 'subscript'
@@ -243,7 +267,7 @@ def worksheet_paragraph_text(paragraph):
                 raise ValueError('Unsupported worksheet OMML ' + script_kind + ': ' + power)
             mapping = superscripts if is_super else subscripts
             return math_text(base).replace('\u200b', '') + power.translate(mapping)
-        if tag in {'oMath', 'oMathPara', 'e', 'sup', 'sub', 'r'}:
+        if tag in {'oMath', 'oMathPara', 'e', 'sup', 'sub', 'r', 'num', 'den'}:
             return ''.join(math_text(child) for child in node)
         raise ValueError('Unsupported worksheet OMML element: ' + tag)
 
@@ -305,7 +329,7 @@ def source_pdf_audit(document: Document, pdf_path: Path) -> int:
                 for paragraph in cell.paragraphs:
                     if paragraph._element.findall('.//{http://schemas.openxmlformats.org/officeDocument/2006/math}oMath'):
                         value = worksheet_paragraph_text(paragraph)
-                        if compact(value) not in pdf_text:
+                        if any(compact(part) not in pdf_text for part in worksheet_audit_fragments(value)):
                             missing.append(value)
                         checks.append((value, compact(value)))
     if missing:
@@ -358,14 +382,29 @@ def paragraph_images(document: Document, paragraph, media_dir: Path, chapter: in
 
 
 def row_events(document: Document, row, media_dir: Path, chapter: int):
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
     events = []
-    for paragraph in row.cells[1].paragraphs:
-        for line in worksheet_paragraph_text(paragraph).splitlines():
-            line = clean(line)
-            if line:
-                events.append(("text", line))
-        for image in paragraph_images(document, paragraph, media_dir, chapter):
-            events.append(("image", image))
+    cell = row.cells[1]
+    for node in cell._tc:
+        if node.tag == qn('w:tbl'):
+            table = Table(node, cell)
+            if node.findall('.//' + qn('w:gridSpan')) or node.findall('.//' + qn('w:vMerge')):
+                raise ValueError('Nested worksheet table spans require review')
+            matrix = [[clean('\n'.join(worksheet_paragraph_text(p) for p in c.paragraphs))
+                       for c in r.cells] for r in table.rows]
+            if not matrix or any(len(r) != len(matrix[0]) for r in matrix):
+                raise ValueError('Irregular nested worksheet table')
+            events.append(('table', {'type': 'table', 'rows': matrix,
+                                     'source_native_table': True}))
+        elif node.tag == qn('w:p'):
+            paragraph = Paragraph(node, cell)
+            for line in worksheet_paragraph_text(paragraph).splitlines():
+                line = clean(line)
+                if line:
+                    events.append(("text", line))
+            for image in paragraph_images(document, paragraph, media_dir, chapter):
+                events.append(("image", image))
     return events
 
 
@@ -434,6 +473,7 @@ def parse_case_events(events):
         if match:
             marks = int(match.group(1))
             text = value[:match.start()].strip()
+            text = re.sub(r'^(?:\([a-z]\)|[a-z][.)])\s+', '', text)
             removed_marks.append({'source': value, 'marks': marks, 'display': text})
             parts.append({'text': text, 'marks': marks, 'answer_lines': marks})
         elif parts:
@@ -466,7 +506,7 @@ def practice_elements(chapter: int, media_dir: Path):
     rows = [row for row in document.tables[1].rows if row.cells[0].text.strip().isdigit()]
     if [int(row.cells[0].text.strip()) for row in rows] != list(range(1, len(rows) + 1)):
         raise ValueError('Question rows are not contiguous')
-    class_number = 6 if '6th' in QUESTIONS_DIR.name else 8
+    class_number = int(re.search(r'Class (\d+)th', QUESTIONS_DIR.name).group(1))
     result = [dict(type='heading', level='section', text='Practice Questions', page_break_before=True)]
     expected = []
     type_counts = Counter()
@@ -490,6 +530,10 @@ def practice_elements(chapter: int, media_dir: Path):
         raw_events = row_events(document, row, media_dir, chapter)
         events = []
         for kind, value in raw_events:
+            if kind == 'table':
+                tables.append(value)
+                events.append((kind, value))
+                continue
             if kind == 'image':
                 converted = convert_table(value, class_number, chapter)
                 if converted['type'] == 'table':
@@ -502,7 +546,7 @@ def practice_elements(chapter: int, media_dir: Path):
                 events.append((kind, value))
         if title in {'Multiple Choice Questions', 'Assertion and Reason'}:
             prompt_lines, options = labeled_options(lines, number)
-            if title == 'Assertion and Reason' and (len(prompt_lines) < 2 or not prompt_lines[1].casefold().startswith('reason (r):')):
+            if title == 'Assertion and Reason' and not re.search(r'\bReason\s*\(R\):', ' '.join(prompt_lines), re.I):
                 raise ValueError(f'Chapter {chapter} question {number}: incomplete assertion/reason pair')
             content = [body(' '.join(prompt_lines))]
             content.extend(value for kind, value in events if kind in {'image', 'table'})
@@ -566,7 +610,7 @@ def practice_elements(chapter: int, media_dir: Path):
         rendered_counts[title] += 1
     for table in tables:
         expected.extend(cell for row in table['rows'] for cell in row if cell and not cell.isdigit())
-    expected_table_counts = {6: {3: 2, 4: 1, 6: 2, 7: 3, 11: 2, 12: 2}, 8: {3: 4, 4: 1}}
+    expected_table_counts = {6: {3: 2, 4: 1, 6: 2, 7: 3, 11: 2, 12: 2}, 7: {ch: 2 for ch in range(4, 10)}, 8: {3: 4, 4: 1}}
     if len(tables) != expected_table_counts[class_number].get(chapter, 0):
         raise ValueError(f'Chapter {chapter}: reviewed table inventory changed')
     question_images.extend({'chapter': chapter, **image} for image in local_images)
@@ -662,7 +706,7 @@ def verify_practice_before_publish(chapters, directory, module, outputs):
         for label, rendered_by_chapter in rendered_by_output.items():
             expected = expected_practice_text[chapter]
             rendered = rendered_by_chapter[chapter]
-            missing = [text for text in expected if norm(text) not in rendered]
+            missing = [text for text in expected if norm(worksheet_audit_text(text)) not in rendered]
             if missing:
                 raise ValueError(
                     f"{label}: Chapter {chapter} Practice Questions text missing from compiled PDF: "
@@ -671,10 +715,10 @@ def verify_practice_before_publish(chapters, directory, module, outputs):
             checks[label] = {"source_text_items_checked": len(expected), "missing": 0}
         question_metadata[chapter]["compiled_prose_checks"] = checks
 
-    tex = (directory / f"{module}.tex").read_text(encoding="utf-8")
+    tex = (directory / f"{module}.tex").read_text(encoding="utf-8") if 'tex' in outputs else None
     lyx = (directory / f"{module}.lyx").read_text(encoding="utf-8")
     expected_lines = sum(item['answer_line_count'] for item in question_metadata.values())
-    if tex.count(r'\rule{\linewidth}{0.3pt}') != expected_lines:
+    if tex is not None and tex.count(r'\rule{\linewidth}{0.3pt}') != expected_lines:
         raise ValueError('TeX answer-line count differs from audited count')
     if lyx.count('rule{\\backslash\nlinewidth}{0.3pt}') != expected_lines:
         raise ValueError('LyX answer-line count differs from audited count')
@@ -682,12 +726,14 @@ def verify_practice_before_publish(chapters, directory, module, outputs):
         for table in metadata['converted_tables']:
             from question_layout import tex_content, lyx_content
             import convert
-            if tex_content([table], convert.render_tex_segments, convert.tex_escape) not in tex:
+            if tex is not None and tex_content([table], convert.render_tex_segments, convert.tex_escape) not in tex:
                 raise ValueError('TeX table cells or ordering changed')
             if lyx_content([table], convert.render_lyx_segments, convert.tex_escape) not in lyx:
                 raise ValueError('LyX native table cells or ordering changed')
+            if table.get('source_native_table'):
+                continue
             reference = 'media/' + table['source_image']['filename']
-            if reference in tex or reference in lyx:
+            if (tex is not None and reference in tex) or reference in lyx:
                 raise ValueError('Converted table picture is still rendered: ' + reference)
             with Image.open(directory / reference) as original:
                 original.verify()
@@ -700,7 +746,7 @@ def verify_practice_before_publish(chapters, directory, module, outputs):
         expected_tex = f"width={image['scale']}\\textwidth]{{media/{image['filename']}}}"
         expected_lyx = f"filename media/{image['filename']}"
         expected_lyx_width = f"width {int(round(image['scale'] * 100))}text%"
-        if expected_tex not in tex or expected_lyx not in lyx or expected_lyx_width not in lyx:
+        if (tex is not None and expected_tex not in tex) or expected_lyx not in lyx or expected_lyx_width not in lyx:
             raise ValueError(f"Question image scale/reference mismatch: {image['filename']}")
 
     result["practice_questions"] = {

@@ -44,3 +44,6 @@ stage2/*.docx
 .builds/
 tmp/
 .venv-linux/
+
+# Windows / Google Drive folder metadata
+[Dd]esktop.ini

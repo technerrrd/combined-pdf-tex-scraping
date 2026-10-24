@@ -36,7 +36,8 @@ def norm(text):
     text = text.lower().replace('\u0131', 'i').replace('\u00ad', '').replace('\ufffd', '')
     text = text.replace('◦', '°')
     text = re.sub(r'--+|[–—]', '', text)
-    text = re.sub(r'(\w)-\s*\n\s*(\w)', r'\1\2', text)
+    text = re.sub(r'(\w)-\s*\n\s*(\w)',
+                  lambda match: match[1] + ('-' if match[1].isdigit() and match[2].isdigit() else '') + match[2], text)
     text = re.sub(r'\\rightarrow\b', '→', text)
     for symbol, macro in sorted(inline.SYMBOLS.items(), key=lambda pair: -len(pair[1])):
         replacement = 'triangle' if macro in (r'\Delta', r'\triangle') else 'congruent' if macro == r'\cong' else symbol.lower()

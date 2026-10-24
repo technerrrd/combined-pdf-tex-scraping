@@ -102,7 +102,9 @@ def update_manifest():
         "question_sources": {
             "git_commit": build.git_commit(),
             "git_dirty": True,
-            "question_files_committed": False,
+            "question_files_committed": all(
+                build.tracked_sha256(Path(QUESTIONS_DIR.name) / source.name) == build.sha256(source)
+                for chapter in CHAPTER_NUMBERS for source in question_paths(chapter)),
             "source_hashes": source_hashes(),
             "adapter_sha256": build.sha256(Path(__file__)),
             "question_layout_sha256": build.sha256(ROOT / 'stage2' / 'question_layout.py'),

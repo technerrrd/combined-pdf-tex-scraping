@@ -106,7 +106,8 @@ def lyx_question(content, render, tex_escape):
         first_text = (lyx_ert(r'\parbox[t]{\dimexpr\linewidth-8em\relax}{')
                       + first_text + '\n'
                       + lyx_ert(r'}\hfill\mbox{\_\_\_\_\_\_\_\_}'))
-    output = '\\begin_layout Enumerate\n' + first_text + '\n\\end_layout\n'
+    alignment = '\\align left\n' if first.get('ragged_right') else ''
+    output = '\\begin_layout Enumerate\n' + alignment + first_text + '\n\\end_layout\n'
     if len(content) > 1:
         for element in content[1:]:
             if element['type'] == 'subquestions':
