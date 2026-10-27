@@ -223,14 +223,21 @@ def test_worksheet_omml_subscript_and_letter_superscript_are_retained(adapter, t
     assert "script subscript" in lyx and "script superscript" in lyx
 
 
-def test_configured_headings_and_mark_based_answer_lines(adapter, tmp_path, monkeypatch):
-    monkeypatch.setattr(adapter, 'QUESTION_HEADINGS', {
+def test_class8_uses_class7_heading_marks_and_lyx_only_policies(adapter):
+    assert adapter.QUESTION_HEADINGS == {
         'Very Short Questions': 'Very Short Answer Questions',
         'Short Questions': 'Short Question Answers',
         'Long Questions': 'Descriptive Answer Questions',
         'Very Long Questions': 'Long Answer Questions',
-    })
-    monkeypatch.setattr(adapter, 'ANSWER_LINES_FROM_MARKS', True)
+    }
+    assert adapter.ANSWER_LINES_FROM_MARKS is True
+    assert adapter.TRUE_FALSE_INLINE_BLANKS is True
+    arguments = adapter.build_arguments()
+    assert arguments.count('--lyx-only') == 1
+    assert arguments[-1] == '--lyx-only'
+
+
+def test_configured_headings_and_mark_based_answer_lines(adapter, tmp_path):
     elements, expected, metadata = adapter.practice_elements(9, tmp_path / 'media')
     for title in adapter.QUESTION_HEADINGS.values():
         assert title in expected
@@ -251,8 +258,7 @@ def test_configured_headings_and_mark_based_answer_lines(adapter, tmp_path, monk
     }
 
 
-def test_true_false_inline_blanks_keep_numbering_without_writing_rules(adapter, tmp_path, monkeypatch):
-    monkeypatch.setattr(adapter, 'TRUE_FALSE_INLINE_BLANKS', True)
+def test_true_false_inline_blanks_keep_numbering_without_writing_rules(adapter, tmp_path):
     elements, _, metadata = adapter.practice_elements(9, tmp_path / 'media')
     statements = []
     in_true_false = False
@@ -429,6 +435,24 @@ def test_tex_writer_ragged_right_applies_only_to_fillblank_body_and_keeps_blanks
     assert rendered.count(r"{\raggedright ") == 1
     assert r"{\raggedright Fill: \_\_\_\_ and \_\_\_\_\_\_.\par}" in rendered
     assert "Ordinary body.\\par" in rendered
+
+
+def test_lyx_writer_left_aligns_only_ragged_fillblank_questions(tmp_path):
+    output = tmp_path / "fill-blanks.lyx"
+    convert.write_lyx([
+        {"type": "question", "content": [
+            {"type": "body", "segments": [("Fill: ____ and ______.", False)], "ragged_right": True},
+        ]},
+        {"type": "question", "content": [
+            {"type": "body", "segments": [("Ordinary body.", False)]},
+        ]},
+    ], output, tmp_path)
+
+    rendered = output.read_text(encoding="utf-8")
+
+    assert rendered.count("\\align left") == 1
+    assert "Fill: ____ and ______." in rendered
+    assert "Ordinary body." in rendered
 
 
 def test_lyx_writer_uses_native_nested_enumerate_for_subquestions(tmp_path):

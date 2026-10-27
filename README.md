@@ -11,6 +11,13 @@ before publishing the staged book or creating a final portable package.
 The primary CLI also accepts `--lyx-only`; the normal default still generates
 and validates both formats. LyX-exported LaTeX is a compilation intermediate.
 
+The supplied Class 8 Science question edition (Chapters 3, 4, 7, 8, 9, 10 and
+12) also uses LyX-only output. Run
+`python tools/rebuild_class8_science_practice.py`. It applies the four Class
+7-style written-question headings, one answer rule per supplied mark, short
+right-aligned true/false blanks, and ragged-right fill-in handling while
+preserving the existing native tables, OMML and half-size question diagrams.
+
 The primary pipeline turns EduRev chapter links into editable TeX and themed LyX,
 then compiles both to PDF. Output is published only after downloads, structure,
 compilation, and any requested reference-PDF checks pass.

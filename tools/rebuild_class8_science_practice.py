@@ -32,9 +32,14 @@ WORKBOOK = ROOT / "Science-notes-links.xlsx"
 QUESTIONS_DIR = Path(os.environ.get('SCIENCE_INPUT_ROOT', ROOT)) / "Class 8th Science"
 CHAPTER_NUMBERS = (3, 4, 7, 8, 9, 10, 12)
 MODULE = "Final-Science_Class8th"
-QUESTION_HEADINGS = {}
-ANSWER_LINES_FROM_MARKS = False
-TRUE_FALSE_INLINE_BLANKS = False
+QUESTION_HEADINGS = {
+    "Very Short Questions": "Very Short Answer Questions",
+    "Short Questions": "Short Question Answers",
+    "Long Questions": "Descriptive Answer Questions",
+    "Very Long Questions": "Long Answer Questions",
+}
+ANSWER_LINES_FROM_MARKS = True
+TRUE_FALSE_INLINE_BLANKS = True
 
 
 def workbook_rows(path: Path, sheet_name: str):
@@ -795,8 +800,8 @@ def update_manifest():
     path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-if __name__ == "__main__":
-    args = [
+def build_arguments():
+    return [
         "--links", str(WORKBOOK),
         "--sheet", "Class 8th",
         "--module", MODULE,
@@ -804,8 +809,16 @@ if __name__ == "__main__":
         "--output-dir", os.environ.get('SCIENCE_OUTPUT_DIR', str(ROOT / "stage2" / "output")),
         "--cache-dir", os.environ.get('SCIENCE_CACHE_DIR', str(ROOT / "input" / "scraped")),
         "--offline",
+        "--lyx-only",
     ]
-    status = scrape_chapters.main(args)
+
+
+def main():
+    status = scrape_chapters.main(build_arguments())
     if status == 0:
         update_manifest()
-    raise SystemExit(status)
+    return status
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

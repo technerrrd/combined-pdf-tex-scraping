@@ -1,6 +1,12 @@
 # Project instructions
 
+- Chapter illustrations must suit black-and-white printing and visibly explain the chapter concept through clear labels/highlighting in a contextual scene. Standalone assets are organised by class and subject in outer `illustrations/Class N/Subject/` (Maths or Science); do not install them in user-edited books without explicit authorization.
+
+- The outer workspace's `Maths Module -2 Final/` (`../../Maths Module -2 Final/` from this nested checkout) contains the user's authoritative edited Class 6, 7 and 8 Maths books. Treat that entire folder, including LyX/PDF files, media and themes, as read-only: no edits, rebuilding, overwriting, renaming, moving, deletion or replacement without explicit authorization. Read for context/review; use separate copies for requested experiments. Do not substitute older generated outputs or add these edited books to Git without an explicit request.
+
 - Class 7 Science Chapters 4–9 are explicitly requested as LyX-only, including its PDF and every-page review by `gpt-5.6-luna`. Use `tools/rebuild_class7_science_practice.py`; do not require a separate direct-TeX edition for this scope. LyX-exported LaTeX remains a compiler intermediate. Preserve nested native worksheet tables and literal OMML fractions.
+
+- Class 8 Science Chapters 3, 4, 7, 8, 9, 10 and 12 are now LyX-only. Use `tools/rebuild_class8_science_practice.py`; retain the four Class 7-style headings, supplied-mark answer lines, short true/false blanks, native tables, literal OMML and half-size question diagrams. Do not restore a direct-TeX edition unless explicitly requested.
 
 - Class 6 true/false statements use a short right-aligned answer blank beside each numbered statement in both formats; never give them full-width written-answer rules.
 

@@ -1,5 +1,34 @@
 # Handoff
 
+## 2026-10-27 Class 8 Science Class 7-style fixes completed
+
+- Class 8 Chapters 3, 4, 7, 8, 9, 10 and 12 now use the same presentation policies as Class 7: the four renamed written-question headings, one answer rule per supplied mark, short right-aligned true/false blanks and left-aligned long fill-ins. `tools/rebuild_class8_science_practice.py` now enables the existing `--lyx-only` path; LyX-exported TeX remains only a compiler intermediate. Shared native-table, OMML, case-part, source-order and half-size question-diagram behavior is unchanged.
+- Source hashes match the previously accepted Class 8 edition. The final inventory remains 405 source rows, 525 rendered items, five native tables, 80 case parts, 19 omitted OR labels and four half-scale question figures; the corrected supplied-mark policy produces 597 answer rules. The accepted LyX PDF is 130 pages with zero compiler diagnostics, SHA-256 `b89914daf055de988232650839966e5f13da86b01a1585918e1f02c157c402b6`.
+- Tests passed on Windows: 27 focused tests; 115 offline tests with one integration case deselected; real compiler integration 1 passed with 115 deselected in 133.20 seconds. The first sandbox LyX export failed with an empty log, matching the known user-profile restriction; the approved native compiler run succeeded. No Linux/CI result is claimed.
+- Per user choice, visual acceptance compared 150-DPI Poppler renders with the previously accepted all-page baseline. All 102 changed pages plus 18 adjacent boundary pages passed inspection; ten unchanged pages were not re-reviewed and this limitation is explicit in `visual-review.json` and the report. No new clipping, overlap, missing figures, broken tables or unreadable question layouts were found.
+- Atomically published 182 files to the outer `../../stage2/output/Final-Science_Class8th/`. The previous two-format edition is recoverable at `../../stage2/output-obsolete-science-20261027-114958/Final-Science_Class8th/`. The verified portable package is `../../stage2/downloads/Final-Class-8-Science-LyX.zip` (172 book files plus OPEN-ME), SHA-256 `cadcd311a8360b93c4a213cf0237c7566f95cc383f29cc6340f06b6b6ea47716`; its prior version is retained beside it with suffix `before-class7-fixes-20261027-114958`.
+- The original legacy cache was not modified. A temporary URL-keyed working cache under outer `tmp/class8-url-cache-20261027/` was assembled from the accepted output media and legacy cached HTML because the available root cache used the older chapter-number layout. No online content was fetched. `D:\Science-Book-Releases` was not touched. The user subsequently authorized a one-off commit and push of this source/test/documentation checkpoint to `origin/main`; the fetched remote matched base `deae267`, and no force push is authorized.
+
+## 2026-10-26 Science heat-transfer illustration sample
+
+- Approved standalone sample completed in outer `illustrations/Class 7/Science/` (`../../illustrations/Class 7/Science/` here): 1774×887 PNG, exact prompt/provenance, README and 170×85 mm A4 print proof. Built-in image tool used; arrow directions and three labels were checked visually, including the rendered proof. PNG copied unchanged and SHA-256 verified.
+- This is a sample pending feedback; no actual printer test or book embedding occurred. User books/media/themes and source questions remain unchanged. No pipeline changes, build, commit or push performed.
+
+## 2026-10-26 illustration folders reorganised
+
+- Current outer artwork folders are `illustrations/Class 6/Maths/`, `illustrations/Class 7/Maths/` and `illustrations/Class 8/Maths/` (5/7/7 PNGs). From this nested checkout use `../../illustrations/`. All 19 images were preserved unchanged and moved files hash-verified.
+- Shared plan is under outer `illustrations/_metadata/`; relative references and the artwork index were updated. Earlier ClassN-Maths paths are historical. No edited books, PDFs or themes changed; no rebuild, commit or push performed.
+
+## 2026-10-26 Class 7/8 Maths standalone illustrations completed
+
+- Fourteen black-and-white contextual illustrations are saved in outer `illustrations/Class7-Maths/` (Chapters 9–15) and `illustrations/Class8-Maths/` (Chapters 8–14); resolve these from this nested checkout through `../../illustrations/`. Each class has seven 1774×887 PNGs, README.md and full prompts/provenance in prompts.json. All images were visually inspected, decoded and SHA-256 copy-verified.
+- Chapter topics were checked against Maths-notes-links.xlsx and supplied cached notes because the user-edited books were absent at their earlier path. No older generated output was treated as the user's edited edition. The approved Class 6 Fractions artwork was a style reference only. No edited books, PDFs or templates were changed; no commit/push performed.
+
+## 2026-10-24 user-edited Maths books registered read-only
+
+- User's authoritative edited Class 6, 7 and 8 Maths editions are in outer `Maths Module -2 Final/` (relative to this nested checkout: `../../Maths Module -2 Final/`). Confirmed three book folders and readable LyX files with media/theme support. No book edits or compilation performed.
+- Both AGENTS.md copies now forbid modifying, rebuilding, moving or replacing these books without explicit authorization. Keep older generated outputs separate from these authoritative editions. This documentation update is uncommitted; prior source push remains `deae267`. No new commit/push is authorized.
+
 ## 2026-10-24 authorized source migration checkpoint
 
 - User explicitly authorized adding and pushing Class 6 and Class 7 Science question sources with the completed Class 7 implementation/context. Added 24 unchanged DOCX/PDF files: Class 6 Chapters 3, 4, 6, 7, 11, 12 and Class 7 Chapters 4–9. Source and copied SHA-256 hashes match. No unrelated invoice, generated output, cache, log, environment or secret is included.
